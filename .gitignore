@@ -1,0 +1,8 @@
+__pycache__/
+.vscode/
+*.pth
+*.o*[0-9]
+data/
+result/
+result_*/
+*.log
