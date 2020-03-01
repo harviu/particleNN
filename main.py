@@ -21,6 +21,8 @@ from model import VAE
 from process_data import *
 from simple import show
 
+from latent_max import LatentMax
+
 
 def train(epoch):
     model.train()
@@ -138,13 +140,24 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
+        #################### test latent_max 
+        lm = LatentMax(model,torch.ones((1024,)))
+        loader = Loader(data_file,1)
+        for data in loader.load_data(0,1):
+            init = to_tensor_list(data,device,args.dim)
+
+        scatter_3d(init[0])
+
+        init = lm.take_one_step_to_target(init)
+
+        scatter_3d(init)
 
         ############################## convert one file to new features
-        filename = data_path + "/run41/024.vtu"
-        data = data_reader(filename)
-        data = data_to_numpy(data)
-        coord = data[:,:3]
-        attr = data[:,3:]
+        # filename = data_path + "/run41/024.vtu"
+        # data = data_reader(filename)
+        # data = data_to_numpy(data)
+        # coord = data[:,:3]
+        # attr = data[:,3:]
         # mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02]
         # std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]
         # data[:,3:] = (data[:,3:] - mean)/std
@@ -176,16 +189,16 @@ if __name__ == "__main__":
         #     pickle.dump(latent,file)
         # print(latent.shape)
 
-        with open("data/latent_024","rb") as file:
-            d = pickle.load(file).cpu()
+        # with open("data/latent_024","rb") as file:
+        #     d = pickle.load(file).cpu()
 
-        pca = PCA(n_components=5)
-        d_embedded = pca.fit_transform(d)
-        print(pca.explained_variance_ratio_)
-        pc = np.concatenate((coord,d_embedded[:,3:]),axis=1)
-        print(pc.shape)
-        scatter_3d(pc[::100],None,None)
-        scatter_3d(data[::100],None,None)
+        # pca = PCA(n_components=5)
+        # d_embedded = pca.fit_transform(d)
+        # print(pca.explained_variance_ratio_)
+        # pc = np.concatenate((coord,d_embedded[:,3:]),axis=1)
+        # print(pc.shape)
+        # scatter_3d(pc[::100],None,None)
+        # scatter_3d(data[::100],None,None)
 
         ######################################
 
