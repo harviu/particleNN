@@ -110,9 +110,9 @@ def nn_distance(pc1,pc2):
 
     d1 = torch.min(d,dim=-1)[0]
     d2 = torch.min(d,dim=-2)[0]
-    d1 = torch.sum(d1,dim=-1)
-    d2 = torch.sum(d2,dim=-1)
-    dis = (d1+d2)/2
+    dis = torch.cat((d1,d2),dim=0)
+    dis = torch.mean(dis)
+    # print(dis)
     return dis
 
 class pointnet_layer(nn.Module):

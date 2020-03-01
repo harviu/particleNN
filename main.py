@@ -26,7 +26,7 @@ def train(epoch):
     model.train()
     train_loss = 0
     for i, data in enumerate(loader.load_data(0,50000)):
-        data = to_tensor_list(data,device)
+        data = to_tensor_list(data,device,args.dim)
         optimizer.zero_grad()
         recon_batch = model(data)
         loss = loss_function(recon_batch, data)
@@ -50,7 +50,7 @@ def test(epoch):
     test_loss = 0
     with torch.no_grad():
         for i, data in enumerate(loader.load_data(50000)):
-            data = to_tensor_list(data,device)
+            data = to_tensor_list(data,device,args.dim)
             recon_batch = model(data)
             loss = loss_function(recon_batch, data)
             test_loss += loss.item()
@@ -84,7 +84,7 @@ if __name__ == "__main__":
                         default=7, help='number of point dimensions')
     # parser.add_argument('-b', '--ball', dest='ball', action='store_true',
     #                     default=False, help='train with ball surrounding')
-    parser.add_argument('--lr', dest='lr', type=float, default=1e-3, help='learning-rate')
+    parser.add_argument('--lr', dest='lr', type=float, default=0.001, help='learning-rate')
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     try:
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         model.eval()
         with torch.no_grad():
             for i, data in enumerate(loader.load_data(50000)):
-                data = to_tensor_list(data,device)
+                data = to_tensor_list(data,device,args.dim)
                 recon_batch = model(data)
                 pc1 = data[11].cpu()
                 pc2 = recon_batch[11].cpu()
@@ -138,32 +138,31 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
-        # sample_all_from_file(os.environ['data']+"/2016_scivis_fpm/0.44/run41/024.vtu")
 
         ############################## convert one file to new features
-        filename = data_path + "/run41/025.vtu"
+        filename = data_path + "/run41/024.vtu"
         data = data_reader(filename)
         data = data_to_numpy(data)
         coord = data[:,:3]
         attr = data[:,3:]
-        mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02]
-        std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]
-        data[:,3:] = (data[:,3:] - mean)/std
-        coord_kd = KDTree(coord)
-        i = 0
-        dd = []
-        for point in coord:
-            ball = coord_kd.query_ball_point(point,r=0.7)
-            print("{}/{}".format(i+1,len(data)),end='\r')
-            dd.append(data[ball])
-            i+=1
-        with open("run41_025","wb") as file:
-            pickle.dump(dd,file)
+        # mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02]
+        # std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]
+        # data[:,3:] = (data[:,3:] - mean)/std
+        # coord_kd = KDTree(coord)
+        # i = 0
+        # dd = []
+        # for point in coord:
+        #     ball = coord_kd.query_ball_point(point,r=0.7)
+        #     print("{}/{}".format(i+1,len(data)),end='\r')
+        #     dd.append(data[ball])
+        #     i+=1
+        # with open("run41_025","wb") as file:
+        #     pickle.dump(dd,file)
 
         ################## encode to latent ##############
         # with open("run41_024","rb") as file:
         #     data = pickle.load(file)
-        #     data = to_tensor_list(data,device)
+        #     data = to_tensor_list(data,device,args.dim)
 
         # model.eval()
         # latent = torch.zeros((len(data),args.vector_length))
@@ -177,16 +176,18 @@ if __name__ == "__main__":
         #     pickle.dump(latent,file)
         # print(latent.shape)
 
-        # with open("latent","rb") as file:
-        #     d = pickle.load(file).cpu()
+        with open("data/latent_024","rb") as file:
+            d = pickle.load(file).cpu()
 
-        # pca = PCA(n_components=5)
-        # d_embedded = pca.fit_transform(d)
-        # print(pca.explained_variance_ratio_)
-        # pc = np.concatenate((coord,d_embedded),axis=1)
-        # print(pc.shape)
-        # scatter_3d(pc[::100],None,None)
-        # scatter_3d(data[::100],None,None)
+        pca = PCA(n_components=5)
+        d_embedded = pca.fit_transform(d)
+        print(pca.explained_variance_ratio_)
+        pc = np.concatenate((coord,d_embedded[:,3:]),axis=1)
+        print(pc.shape)
+        scatter_3d(pc[::100],None,None)
+        scatter_3d(data[::100],None,None)
+
+        ######################################
 
         # target = p2[118901][None,:]
         # distance = p2-target

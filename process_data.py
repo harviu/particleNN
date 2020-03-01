@@ -211,10 +211,11 @@ def scatter_3d(array,vmin=None,vmax=None):
     # ax2.scatter(array2[:,0],array2[:,1],array2[:,2],c=array2[:,3],marker='^',vmin=-1,vmax=1)
     plt.show()
 
-def to_tensor_list(data,device):
+def to_tensor_list(data,device,kept_dim=7):
     tensor_list = []
     for datum in data:
-        tensor = torch.from_numpy(datum).float().to(device)
+        numpy_datum = datum[:,:kept_dim]
+        tensor = torch.from_numpy(numpy_datum).float().to(device)
         tensor_list.append(tensor)
     return tensor_list
 
