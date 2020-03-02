@@ -31,8 +31,8 @@ def train(epoch):
     for i, data in enumerate(loader.load_data(0,50000)):
         data = to_tensor_list(data,device,args.dim)
         optimizer.zero_grad()
-        recon_batch, mu, logvar = model(data)
-        loss = loss_function(recon_batch, data, mu, logvar)
+        recon_batch = model(data)
+        loss = loss_function(recon_batch, data)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
@@ -54,8 +54,8 @@ def test(epoch):
     with torch.no_grad():
         for i, data in enumerate(loader.load_data(50000)):
             data = to_tensor_list(data,device,args.dim)
-            recon_batch, mu, logvar = model(data)
-            loss = loss_function(recon_batch, data, mu, logvar)
+            recon_batch = model(data)
+            loss = loss_function(recon_batch, data)
             test_loss += loss.item()
             # scatter_3d(data[0].cpu())
             # scatter_3d(recon_batch[0].cpu())
@@ -122,7 +122,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             for i, data in enumerate(loader.load_data(50000)):
                 data = to_tensor_list(data,device,args.dim)
-                recon_batch, mu, logvar = model(data)
+                recon_batch = model(data)
                 pc1 = data[11].cpu()
                 pc2 = recon_batch[11].cpu()
                 pca = PCA(n_components=2)
