@@ -62,9 +62,8 @@ class VAE(nn.Module):
         # x = torch.max(x,dim=-2)[0]
         x = self.fc01(x)
         x = F.leaky_relu(x)
-        # mu, logvar = self.fc10(x), self.fc11(x)
-        # return mu, logvar
-        return x
+        mu, logvar = self.fc10(x), self.fc11(x)
+        return mu, logvar
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -76,7 +75,7 @@ class VAE(nn.Module):
         y = y.view(-1,self.prediction_num,self.num_channel)
         return y
 
-    def loss(self,output, target):
+    def loss(self,output, target,logvar,mu):
         # print(output.shape,target.shape)
         recon_loss = 0
         for i in range(len(output)):
@@ -84,21 +83,21 @@ class VAE(nn.Module):
             pc2 = target[i]
             recon_loss += nn_distance(pc1,pc2)
         recon_loss /= len(output)
+        recon_loss *= 1000
 
         # see Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        # KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        # print(recon_loss,KLD)
-        return recon_loss
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        print(recon_loss,KLD)
+        return recon_loss+KLD
 
     def forward(self, x):
-        # mu, logvar = self.encode(x)
-        x = self.encode(x)
-        # z = self.reparameterize(mu, logvar)
-        y = self.decode(x)
-        return y
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        y = self.decode(z)
+        return y, mu, logvar
 
 def nn_distance(pc1,pc2):
     np1 = pc1.shape[0]

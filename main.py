@@ -19,9 +19,10 @@ from vtk.util import numpy_support
 
 from model import VAE
 from process_data import *
+from latent_max import LatentMax
+from mean_shift import *
 from simple import show
 
-from latent_max import LatentMax
 
 
 def train(epoch):
@@ -30,8 +31,8 @@ def train(epoch):
     for i, data in enumerate(loader.load_data(0,50000)):
         data = to_tensor_list(data,device,args.dim)
         optimizer.zero_grad()
-        recon_batch = model(data)
-        loss = loss_function(recon_batch, data)
+        recon_batch, mu, logvar = model(data)
+        loss = loss_function(recon_batch, data, mu, logvar)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
@@ -53,8 +54,8 @@ def test(epoch):
     with torch.no_grad():
         for i, data in enumerate(loader.load_data(50000)):
             data = to_tensor_list(data,device,args.dim)
-            recon_batch = model(data)
-            loss = loss_function(recon_batch, data)
+            recon_batch, mu, logvar = model(data)
+            loss = loss_function(recon_batch, data, mu, logvar)
             test_loss += loss.item()
             # scatter_3d(data[0].cpu())
             # scatter_3d(recon_batch[0].cpu())
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument('-v', '--vector', dest='vector_length', type=int,
                         default=1024, help='vector length')
     parser.add_argument('-d', '--dim', dest='dim', type=int,
-                        default=7, help='number of point dimensions')
+                        default=4, help='number of point dimensions')
     # parser.add_argument('-b', '--ball', dest='ball', action='store_true',
     #                     default=False, help='train with ball surrounding')
     parser.add_argument('--lr', dest='lr', type=float, default=0.001, help='learning-rate')
@@ -121,7 +122,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             for i, data in enumerate(loader.load_data(50000)):
                 data = to_tensor_list(data,device,args.dim)
-                recon_batch = model(data)
+                recon_batch, mu, logvar = model(data)
                 pc1 = data[11].cpu()
                 pc2 = recon_batch[11].cpu()
                 pc1_embedded = PCA(n_components=2).fit_transform(pc1)
@@ -140,17 +141,20 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
-        #################### test latent_max 
-        lm = LatentMax(model,torch.ones((1024,)))
-        loader = Loader(data_file,1)
-        for data in loader.load_data(0,1):
-            init = to_tensor_list(data,device,args.dim)
+        ############# guided shift
+        # first test this on the same frame
+        center = (1.5,-1,6.25)
+        data = data_reader(data_path+r"\run41\024.vtu")
+        data = data_to_numpy(data)
+        data = data[:,:args.dim]
+        df = data_frame(data,3,center,1,bins=12)
+        target_pc = df.near_pc.copy()
 
-        scatter_3d(init[0])
-
-        init = lm.take_one_step_to_target(init)
-
-        scatter_3d(init)
+        # set the start center
+        df.center = (1,-0.5,5.75)
+        df.update()
+        gs = guided_shift(model,target_pc,df,device,args.dim)
+        gs.shift()
 
         ############################## convert one file to new features
         # filename = data_path + "/run41/024.vtu"

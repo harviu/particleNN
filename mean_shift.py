@@ -5,19 +5,49 @@ import numpy as np
 from matplotlib import pyplot as plt
 import pickle
 
-from process_data import data_reader,data_to_numpy,scatter_3d
 from scipy.spatial import KDTree
 from sklearn.decomposition import PCA
 
+from process_data import data_reader,data_to_numpy,scatter_3d,to_tensor_list
+from latent_max import LatentMax
+
 MAX = 360
 eps = 1e-30
-# def weighted_hist(center,h,coord,samples,bins,ranges):
-#     weights = np.sum(((coord-center)/h)**2,axis=-1)
-#     return np.histogramdd(samples,bins,range=ranges,weights = weights,density = True)[0]
+
+class guided_shift():
+    def __init__(self,model,target_pc,init_df,device,dim):
+        self.target_pc = target_pc
+        model.eval()
+        self.model = model
+        self.init_df = init_df
+        self.dim = dim
+        self.device = device
+        # get the latent representation of the target
+        self.encoder = self.model.encode
+        target_tensor = to_tensor_list([self.target_pc],device,dim)
+        target_latent = self.encoder(target_tensor)
+        # initialize latent optimizer
+        self.latent_opt = LatentMax(model, target_latent)
+        # init mean shifter
+        self.ms = mean_shift(None,self.init_df,ite=30)
+        # how about stopping criteria?
+
+    def shift(self):
+        while True:
+            # update init point cloud
+            init_pc = self.init_df.near_pc
+            copy = init_pc.copy()
+            init_pc = to_tensor_list([init_pc],self.device,self.dim)
+            # get the next pc through latent optimizer
+            # notice the init_pc is changed inplace
+            next_pc = self.latent_opt.take_one_step_to_target(init_pc)
+            # mean shift to next pc
+            next_pc = next_pc[0].numpy()
+            self.ms.target = next_pc
+            self.ms.shift()
+            # when to stop?
 
 
-# def calc_weights(samples,target,hist):
-#     pass
 
 
 class data_frame():
@@ -29,6 +59,7 @@ class data_frame():
         self.h = h
         self.center = center
         self.ranges = ranges
+        self.coord_dim = n_channel
         self.update()
 
     def update(self):
@@ -38,31 +69,32 @@ class data_frame():
         near = self.kd.query_ball_point(self.center,self.h)
         self.near_coord = self.coord[near]
         self.near_attr = self.attr[near]
-        self.hist = None
+        self.near_pc = np.concatenate((self.near_coord,self.near_attr),axis=1)
+
         if self.ranges is None:
             rmax = np.max(self.near_attr,axis=0)
             rmin = np.min(self.near_attr,axis=0)
             ranges = np.stack((rmin,rmax),axis=-1)
         else:
             ranges = self.ranges
-        self._hist()
+        self.hist = weighted_hist(self.near_coord,self.near_attr, self.center,self.h,self.bins,self.ranges)
 
-    def _hist(self):
-        weights = 1 - np.sum(((self.near_coord-self.center)/self.h)**2,axis=-1)
-        hist = np.histogramdd(
-            self.near_attr,
-            bins = self.bins,
-            range = self.ranges,
-            weights = weights,
-            density = True)
-        self.hist = hist[0]
+def weighted_hist(near_coord,near_attr, center, h,bins,ranges):
+    weights = 1 - np.sum(((near_coord-center)/h)**2,axis=-1)
+    hist = np.histogramdd(
+        near_attr,
+        bins = bins,
+        range = ranges,
+        weights = weights,
+        density = True)
+    return hist[0]
         
 
 class mean_shift():
     def __init__(self,target,data,ite=None,dis=None):
         """
         data: data_frame object to search
-        target: target histgram
+        target: target point cloud
         """
         self.target = target
         self.data = data
@@ -72,26 +104,24 @@ class mean_shift():
     def next_center(self):
         data = self.data
         target = self.target
+        coord_dim = self.data.coord_dim
         
         ### adaptive range 
         data_rmax = np.max(data.near_attr,axis=0)
         data_rmin = np.min(data.near_attr,axis=0)
-        target_rmax = np.max(target.near_attr,axis=0)
-        target_rmin = np.min(target.near_attr,axis=0)
+        target_rmax = np.max(target[:,coord_dim:],axis=0)
+        target_rmin = np.min(target[:,coord_dim:],axis=0)
         new_rmin = np.where(data_rmin<target_rmin,data_rmin,target_rmin)
         new_rmax = np.where(data_rmax>target_rmax,data_rmax,target_rmax)
         new_ranges = np.stack((new_rmin,new_rmax),axis=-1)
         # new_ranges = ((0,MAX),(-1,1),(-1,1),(-1,1))
         data.ranges = new_ranges
-        target.ranges = new_ranges
         data.update()
-        target.update()
+        target_center = np.mean(target[:,:coord_dim],axis=0)
+        target_hist = weighted_hist(target[:,:coord_dim],target[:,coord_dim:],target_center,data.h,data.bins,new_ranges)
 
-        weights = np.sqrt(target.hist/(data.hist+eps))
-        # print(data.hist[0,:])
-        # print(target.hist)
-        # print(data.hist)
-        # os.system("pause")
+        weights = np.sqrt(target_hist/(data.hist+eps))
+
         near_bins = self._get_bins(data.near_attr,data.ranges,data.bins)
         
         new_center = np.zeros((len(data.center),))
@@ -140,13 +170,9 @@ class mean_shift():
         while(True):
             # print(i)
             center = self.data.center
-            # print("hsit", hist)
-            # print("target",self.target)
             next_center = self.next_center()
             self.data.center = (next_center+self.data.center)/2
             self.data.update()
-            # print("new_hist",self.data.hist)
-            # print(hist_similarity(hist,self.target))
             i+=1
             if mode == "ite":
                 if i == self.ite:
@@ -154,7 +180,7 @@ class mean_shift():
             else:
                 if np.sqrt(np.sum((center-next_center)**2))<self.dis:
                     break
-        print("next_center",self.data.center)
+        print("Mean_shift_next_center",self.data.center)
         return self.data
 
 def hist_similarity(h1,h2):
@@ -168,10 +194,6 @@ def nn_distance(pc1,pc2):
 
     d1 = np.min(d,axis=-1)
     d2 = np.min(d,axis=-2)
-    # print(d1.shape,d2.shape)
-    # d1 = np.sum(d1,axis=-1)
-    # d2 = np.sum(d2,axis=-1)
-    # dis = (d1+d2)/2
     dis = np.concatenate((d1,d2))
     dis = np.mean(dis)
     return dis
@@ -216,55 +238,55 @@ if __name__ == "__main__":
     
     #################### latent
 
-    data = data_reader(data_dir+r"\2016_scivis_fpm\0.44\run41\024.vtu")
-    data = data_to_numpy(data)
-    data = data[:,:4]
+    # data = data_reader(data_dir+r"\2016_scivis_fpm\0.44\run41\024.vtu")
+    # data = data_to_numpy(data)
+    # data = data[:,:4]
     
-    with open("data/latent_024","rb") as file:
-        d = pickle.load(file).cpu()
+    # with open("data/latent_024","rb") as file:
+    #     d = pickle.load(file).cpu()
     
-    with open("data/latent_025","rb") as file:
-        d2 = pickle.load(file).cpu()
+    # with open("data/latent_025","rb") as file:
+    #     d2 = pickle.load(file).cpu()
 
-    pca = PCA(n_components=1)
-    dd = np.concatenate((d,d2),axis=0)
-    pca.fit(d)
-    d_embedded = pca.transform(d)
-    d_embedded2 = pca.transform(d2)
+    # pca = PCA(n_components=1)
+    # dd = np.concatenate((d,d2),axis=0)
+    # pca.fit(d)
+    # d_embedded = pca.transform(d)
+    # d_embedded2 = pca.transform(d2)
 
-    center = (1.5,-1,6.25)
-    new_data = np.concatenate((data,d_embedded),axis=1)
-    model = data_frame(new_data,3,center,1,bins=12)
-    pc1 = np.concatenate((model.near_coord,model.near_attr),axis = 1)
-    pc1[:,0] -= np.mean(pc1[:,0])
-    pc1[:,1] -= np.mean(pc1[:,1])
-    pc1[:,2] -= np.mean(pc1[:,2])
-    # scatter_3d(pc1)
+    # center = (1.5,-1,6.25)
+    # new_data = np.concatenate((data,d_embedded),axis=1)
+    # model = data_frame(new_data,3,center,1,bins=12)
+    # pc1 = np.concatenate((model.near_coord,model.near_attr),axis = 1)
+    # pc1[:,0] -= np.mean(pc1[:,0])
+    # pc1[:,1] -= np.mean(pc1[:,1])
+    # pc1[:,2] -= np.mean(pc1[:,2])
+    # # scatter_3d(pc1)
 
-    data2 = data_reader(data_dir+r"\2016_scivis_fpm\0.44\run41\025.vtu")
-    data2 = data_to_numpy(data2)
-    data2 = data2[:,:4]
+    # data2 = data_reader(data_dir+r"\2016_scivis_fpm\0.44\run41\025.vtu")
+    # data2 = data_to_numpy(data2)
+    # data2 = data2[:,:4]
 
-    # center2 = (1.2,-1.3,5.95)
-    new_aim = np.concatenate((data2,d_embedded2),axis=1)
-    target = data_frame(new_aim,3,center,1,bins=12)
-    pc2 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
-    pc2[:,0] -= np.mean(pc2[:,0])
-    pc2[:,1] -= np.mean(pc2[:,1])
-    pc2[:,2] -= np.mean(pc2[:,2])
-    # scatter_3d(pc2)
+    # # center2 = (1.2,-1.3,5.95)
+    # new_aim = np.concatenate((data2,d_embedded2),axis=1)
+    # target = data_frame(new_aim,3,center,1,bins=12)
+    # pc2 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
+    # pc2[:,0] -= np.mean(pc2[:,0])
+    # pc2[:,1] -= np.mean(pc2[:,1])
+    # pc2[:,2] -= np.mean(pc2[:,2])
+    # # scatter_3d(pc2)
 
-    ms = mean_shift(model,target,ite=100)
-    ms.shift()
-    pc3 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
-    pc3[:,0] -= np.mean(pc3[:,0])
-    pc3[:,1] -= np.mean(pc3[:,1])
-    pc3[:,2] -= np.mean(pc3[:,2])
-    # scatter_3d(pc3)
+    # ms = mean_shift(model,target,ite=100)
+    # ms.shift()
+    # pc3 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
+    # pc3[:,0] -= np.mean(pc3[:,0])
+    # pc3[:,1] -= np.mean(pc3[:,1])
+    # pc3[:,2] -= np.mean(pc3[:,2])
+    # # scatter_3d(pc3)
 
-    print(pc1.shape)
-    print("original distance:",nn_distance(pc1[:,:4],pc2[:,:4]))
-    print("after meanshift:",nn_distance(pc1[:,:4],pc3[:,:4]))
+    # print(pc1.shape)
+    # print("original distance:",nn_distance(pc1[:,:4],pc2[:,:4]))
+    # print("after meanshift:",nn_distance(pc1[:,:4],pc3[:,:4]))
 
     ############
     # t1 = datetime.now()
