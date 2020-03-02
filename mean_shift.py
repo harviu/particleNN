@@ -11,43 +11,7 @@ from process_data import data_reader,data_to_numpy,scatter_3d,to_tensor_list
 from latent_max import LatentMax
 
 MAX = 360
-eps = 1e-30
-
-class guided_shift():
-    def __init__(self,model,target_pc,init_df,device,dim):
-        self.target_pc = target_pc
-        model.eval()
-        self.model = model
-        self.init_df = init_df
-        self.dim = dim
-        self.device = device
-        # get the latent representation of the target
-        self.encoder = self.model.encode
-        target_tensor = to_tensor_list([self.target_pc],device,dim)
-        target_latent = self.encoder(target_tensor)
-        # initialize latent optimizer
-        self.latent_opt = LatentMax(model, target_latent)
-        # init mean shifter
-        self.ms = mean_shift(None,self.init_df,ite=30)
-        # how about stopping criteria?
-
-    def shift(self):
-        while True:
-            # update init point cloud
-            init_pc = self.init_df.near_pc
-            copy = init_pc.copy()
-            init_pc = to_tensor_list([init_pc],self.device,self.dim)
-            # get the next pc through latent optimizer
-            # notice the init_pc is changed inplace
-            next_pc = self.latent_opt.take_one_step_to_target(init_pc)
-            # mean shift to next pc
-            next_pc = next_pc[0].numpy()
-            self.ms.target = next_pc
-            self.ms.shift()
-            # when to stop?
-
-
-
+eps = 1e-10
 
 class data_frame():
     def __init__(self,data,n_channel,center,h,bins=None,ranges=None):
@@ -87,6 +51,33 @@ def weighted_hist(near_coord,near_attr, center, h,bins,ranges):
         weights = weights,
         density = True)
     return hist[0]
+
+class guided_shift():
+    def __init__(self, target_pc, init_df: data_frame, guide: LatentMax):
+        self.target_pc = target_pc
+        self.init_df = init_df
+        # guide is a latent optimizer
+        self.guide = guide
+        # init mean shifter
+        self.ms = mean_shift(None,self.init_df,ite=30)
+        # how about stopping criteria?
+
+    def shift(self):
+        while True:
+            # update init point cloud
+            init_pc = self.init_df.near_pc
+            print(init_pc.shape)
+            copy = init_pc.copy()
+            # get the next pc through latent optimizer
+            # notice the init_pc is changed inplace
+            # for i in range(5):
+            next_pc = self.guide.take_one_step_to_target(init_pc)
+            # print(next_pc)
+            # mean shift to next pc
+            self.ms.target = next_pc
+            self.ms.shift()
+            # when to stop?
+            # break
         
 
 class mean_shift():
@@ -119,6 +110,8 @@ class mean_shift():
         target_center = np.mean(target[:,:coord_dim],axis=0)
         target_hist = weighted_hist(target[:,:coord_dim],target[:,coord_dim:],target_center,data.h,data.bins,new_ranges)
 
+        target_hist[target_hist<0]=0
+        data.hist[data.hist<0]=0
         weights = np.sqrt(target_hist/(data.hist+eps))
 
         near_bins = self._get_bins(data.near_attr,data.ranges,data.bins)
@@ -216,7 +209,7 @@ if __name__ == "__main__":
     # plt.scatter(pc2[:,0],pc2[:,1],c=pc2[:,2])
     # plt.show()
 
-    # ms = mean_shift(tar,aim,ite=50)
+    # ms = mean_shift(tar.near_pc,aim,ite=50)
     # ms.shift()
     # pc3 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
     # plt.scatter(pc3[:,0],pc3[:,1],c=pc3[:,2])
@@ -290,47 +283,48 @@ if __name__ == "__main__":
     ############
     # t1 = datetime.now()
 
-    # center = (1.5,-1,6.25)
-    # di1 = data_dir+"\\2016_scivis_fpm\\0.44\\run41\\024.vtu"
+    center = (1.5,-1,6.25)
+    di1 = data_dir+"\\2016_scivis_fpm\\0.44\\run41\\024.vtu"
     # di2 = data_dir+"\\2016_scivis_fpm\\0.44\\run41\\025.vtu"
 
-    # data = data_reader(di1)
-    # data = data_to_numpy(data)
-    # data = data[:,:4]
+    data = data_reader(di1)
+    data = data_to_numpy(data)
+    data = data[:,:4]
 
     # data2 = data_reader(di2)
     # data2 = data_to_numpy(data2)
     # data2 = data2[:,:4]
 
-    # model = data_frame(data,3,center,1,bins=12)
-    # pc1 = np.concatenate((model.near_coord,model.near_attr),axis = 1)
-    # pc1[:,0] -= np.mean(pc1[:,0])
-    # pc1[:,1] -= np.mean(pc1[:,1])
-    # pc1[:,2] -= np.mean(pc1[:,2])
-    # # scatter_3d(pc1)
+    model = data_frame(data,3,center,1,bins=12)
+    m = model.near_pc
+    pc1 = model.near_pc.copy()
+    pc1[:,0] -= np.mean(pc1[:,0])
+    pc1[:,1] -= np.mean(pc1[:,1])
+    pc1[:,2] -= np.mean(pc1[:,2])
+    # scatter_3d(pc1)
 
-    # # center2 = (1.2,-1.3,5.95)
+    center2 = (1.4,-0.9,6.05)
 
-    # target = data_frame(data2,3,center,1,bins=12)
-    # pc2 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
-    # pc2[:,0] -= np.mean(pc2[:,0])
-    # pc2[:,1] -= np.mean(pc2[:,1])
-    # pc2[:,2] -= np.mean(pc2[:,2])
-    # # scatter_3d(pc2)
+    target = data_frame(data,3,center2,1,bins=12)
+    pc2 = target.near_pc.copy()
+    pc2[:,0] -= np.mean(pc2[:,0])
+    pc2[:,1] -= np.mean(pc2[:,1])
+    pc2[:,2] -= np.mean(pc2[:,2])
+    # scatter_3d(pc2)
 
-    # ms = mean_shift(model,target,ite=100)
-    # ms.shift()
-    # pc3 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
-    # pc3[:,0] -= np.mean(pc3[:,0])
-    # pc3[:,1] -= np.mean(pc3[:,1])
-    # pc3[:,2] -= np.mean(pc3[:,2])
-    # # scatter_3d(pc3)
+    ms = mean_shift(m,target,ite=30)
+    ms.shift()
+    pc3 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
+    pc3[:,0] -= np.mean(pc3[:,0])
+    pc3[:,1] -= np.mean(pc3[:,1])
+    pc3[:,2] -= np.mean(pc3[:,2])
+    # scatter_3d(pc3)
 
-    # center = target.center
+    center = target.center
 
-    # print(pc1.shape)
-    # print("original distance:",nn_distance(pc1,pc2))
-    # print("after meanshift:",nn_distance(pc1,pc3))
+    print(pc1.shape)
+    print("original distance:",nn_distance(pc1,pc2))
+    print("after meanshift:",nn_distance(pc1,pc3))
 
     # t2 = datetime.now()
     # print(t2-t1)

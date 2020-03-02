@@ -125,15 +125,17 @@ if __name__ == "__main__":
                 recon_batch, mu, logvar = model(data)
                 pc1 = data[11].cpu()
                 pc2 = recon_batch[11].cpu()
-                pc1_embedded = PCA(n_components=2).fit_transform(pc1)
-                pc2_embedded = PCA(n_components=2).fit_transform(pc2)
+                pca = PCA(n_components=2)
+                pca.fit(np.concatenate((pc1,pc2),axis=0))
+                pc1_embedded = pca.transform(pc1)
+                pc2_embedded = pca.transform(pc2)
                 print(pc1_embedded.shape)
                 print(pc2_embedded.shape)
-                plt.scatter(pc1_embedded[:,0],pc1_embedded[:,1])
-                plt.show()
+                # plt.scatter(pc1_embedded[:,0],pc1_embedded[:,1])
+                # plt.show()
                 scatter_3d(pc1)
-                plt.scatter(pc2_embedded[:,0],pc2_embedded[:,1])
-                plt.show()
+                # plt.scatter(pc2_embedded[:,0],pc2_embedded[:,1])
+                # plt.show()
                 scatter_3d(pc2)
     elif args.phase == 0:
         loader = Loader(data_file,args.batch_size)
@@ -147,13 +149,14 @@ if __name__ == "__main__":
         data = data_reader(data_path+r"\run41\024.vtu")
         data = data_to_numpy(data)
         data = data[:,:args.dim]
-        df = data_frame(data,3,center,1,bins=12)
+        df = data_frame(data,3,center,0.7,bins=12)
         target_pc = df.near_pc.copy()
 
         # set the start center
-        df.center = (1,-0.5,5.75)
+        df.center = (1,-0.5,6)
         df.update()
-        gs = guided_shift(model,target_pc,df,device,args.dim)
+        guide = LatentMax(model,target_pc,device,args.dim)
+        gs = guided_shift(target_pc,df,guide)
         gs.shift()
 
         ############################## convert one file to new features
