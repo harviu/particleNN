@@ -19,8 +19,7 @@ class LatentMax():
         # scatter_3d(target)
         target = to_tensor_list([target],device,dim)
         encoder = self.model.encode
-        mu, logvar = encoder(target)
-        self.target_latent = self.model.reparameterize(mu, logvar)
+        self.target_latent = encoder(target)
 
     def take_one_step_to_target(self,data_input):
         # !!!! change data_input to value not tensor
@@ -36,8 +35,7 @@ class LatentMax():
         x = data_input
         encoder = self.model.encode
         # latent is the latent representation for initial point cloud
-        mu, logvar = encoder(x)
-        latent = self.model.reparameterize(mu, logvar)
+        latent = encoder(x)
         # Loss function is latent presentation of init pc to target latent
         # optimize the average for now, still we can optimize every dimension?
         loss = torch.mean(self.target_latent - latent)
