@@ -156,28 +156,35 @@ if __name__ == "__main__":
         
         center = (1.5,-1,6.25)
         di1 = data_path+"\\run41\\024.vtu"
+        di2 = data_path+"\\run41\\025.vtu"
 
         data = data_reader(di1)
         data = data_to_numpy(data)
         data = data[:,:4]
 
+        data2 = data_reader(di2)
+        data2 = data_to_numpy(data2)
+        data2 = data2[:,:4]
+
         start_df = latent_df(data,3,center,0.7,10,None,model,device,args.dim)
         m = start_df.near_pc
         pc1 = m.copy()
         pc1 = mean_sub(pc1)
-        # print(m.shape)
+        scatter_3d(pc1)
 
-        center2 = (0.5,-0,5.25)
+        # center2 = (0,0.5,6)
 
-        target = latent_df(data,3,center2,0.7,10,None,model,device,args.dim)
+        target = latent_df(data2,3,center,0.7,10,None,model,device,args.dim)
         pc2 = target.near_pc.copy()
         pc2 = mean_sub(pc2)
+        scatter_3d(pc2)
         # print(pc2.shape)
 
-        ms = mean_shift(m,target,ite=50)
+        ms = mean_shift(m,target,ite=5)
         ms.shift()
         pc3 = target.near_pc.copy()
         pc3 = mean_sub(pc3)
+        scatter_3d(pc3)
 
         # center = target.center
 
