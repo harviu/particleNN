@@ -7,7 +7,7 @@ import pickle
 from scipy.spatial import KDTree
 from sklearn.decomposition import PCA
 
-from process_data import data_reader,data_to_numpy,scatter_3d,to_tensor_list
+from process_data import *
 from latent_max import LatentMax
 
 MAX = 360
@@ -15,6 +15,7 @@ eps = 1e-10
 
 class data_frame():
     def __init__(self,data,n_channel,center,h,bins=None,ranges=None):
+        self.data = data
         self.coord = data[:,:n_channel]
         self.attr = data[:,n_channel:]
         self.kd = KDTree(self.coord)
@@ -29,11 +30,10 @@ class data_frame():
         """
         update the hist to new center
         """
-        near = self.kd.query_ball_point(self.center,self.h)
-        self.near_coord = self.coord[near]
-        self.near_attr = self.attr[near]
-        self.near_pc = np.concatenate((self.near_coord,self.near_attr),axis=1)
-
+        self.near = self.kd.query_ball_point(self.center,self.h)
+        self.near_coord = self.coord[self.near]
+        self.near_attr = self.attr[self.near]
+        self.near_pc = self.data[self.near]
         if self.ranges is None:
             rmax = np.max(self.near_attr,axis=0)
             rmin = np.min(self.near_attr,axis=0)
@@ -41,6 +41,58 @@ class data_frame():
         else:
             ranges = self.ranges
         self.hist = weighted_hist(self.near_coord,self.near_attr, self.center,self.h,self.bins,self.ranges)
+    
+class latent_df(data_frame):
+    def __init__(self,data,n_channel,center,h,bins,ranges,model,device,dim,pca=None):
+        self.model = model
+        self.pca = pca
+        latent = np.zeros((len(data),1))
+        self.center = center
+        self.bins = bins
+        self.h = h
+        self.ranges = ranges
+        self.coord_dim = n_channel
+        self.device = device
+        self.dim = dim
+        self.data = np.concatenate((data,latent),axis=1)
+        self.coord = self.data[:,:n_channel]
+        self.attr = self.data[:,n_channel:]
+        self.kd = KDTree(self.coord)
+        self.update()
+
+    def update(self):
+        super().update()
+        self.calc_latent(self.model,self.device,self.dim,self.pca)
+        # print(self.near_attr)
+        # print(self.near_attr)
+        super().update()
+
+    def calc_latent(self,model,device,dim,pca):
+        """
+        calculte the latent vectors of points around center
+        """
+        for point in self.near:
+            coord = self.coord[point]
+            near = self.kd.query_ball_point(coord,self.h)
+            point_cloud = self.data[near][:,:-1]
+            # self.data[point,-1] = np.mean(point_cloud[:,3])
+            lat = get_latent(model,point_cloud,device,dim)
+            if pca is not None:
+                lat = pca.transform(lat)
+            self.data[point,-1] = lat[0,500]
+        self.near_coord = self.coord[self.near]
+        self.near_attr = self.attr[self.near]
+        self.near_pc = self.data[self.near]
+
+
+            
+    
+def get_latent(model,x:np.ndarray,device,dim):
+    x = prepare_for_model([x],device,3,dim)
+    # scatter_3d(x[0])
+    with torch.no_grad():
+        y = model.encode(x)
+    return y.detach().cpu().numpy()        
 
 def weighted_hist(near_coord,near_attr, center, h,bins,ranges):
     weights = 1 - np.sum(((near_coord-center)/h)**2,axis=-1)
@@ -66,12 +118,14 @@ class guided_shift():
         while True:
             # update init point cloud
             init_pc = self.init_df.near_pc
-            print(init_pc.shape)
-            copy = init_pc.copy()
+            mean =  np.mean(init_pc[:,:3],axis=0)
+            init_pc[:,:3] -= mean[None,:]
+            # scatter_3d(init_pc)
+            # copy = init_pc.copy()
             # get the next pc through latent optimizer
             # notice the init_pc is changed inplace
-            # for i in range(5):
             next_pc = self.guide.take_one_step_to_target(init_pc)
+            next_pc[:,:3] += mean[None,:]
             # print(next_pc)
             # mean shift to next pc
             self.ms.target = next_pc
@@ -127,6 +181,7 @@ class mean_shift():
             near_w[i]=w
 
         new_center /= w_sum
+        print(new_center)
         return new_center
 
     def _get_bins(self,samples, ranges, bins):
@@ -163,7 +218,8 @@ class mean_shift():
             # print(i)
             center = self.data.center
             next_center = self.next_center()
-            self.data.center = (next_center+self.data.center)/2
+            # self.data.center = (next_center+self.data.center)/2
+            self.data.center = next_center
             self.data.update()
             i+=1
             if mode == "ite":
@@ -295,7 +351,7 @@ if __name__ == "__main__":
     # data2 = data_to_numpy(data2)
     # data2 = data2[:,:4]
 
-    model = data_frame(data,3,center,1,bins=12)
+    model = data_frame(data,3,center,0.7,bins=1000)
     m = model.near_pc
     pc1 = model.near_pc.copy()
     pc1[:,0] -= np.mean(pc1[:,0])
@@ -303,9 +359,9 @@ if __name__ == "__main__":
     pc1[:,2] -= np.mean(pc1[:,2])
     # scatter_3d(pc1)
 
-    center2 = (1.4,-0.9,6.05)
+    center2 = (2.3,-0,6.55)
 
-    target = data_frame(data,3,center2,1,bins=12)
+    target = data_frame(data,3,center2,0.7,bins=1000)
     pc2 = target.near_pc.copy()
     pc2[:,0] -= np.mean(pc2[:,0])
     pc2[:,1] -= np.mean(pc2[:,1])
@@ -322,7 +378,7 @@ if __name__ == "__main__":
 
     center = target.center
 
-    print(pc1.shape)
+    # print(pc1.shape)
     print("original distance:",nn_distance(pc1,pc2))
     print("after meanshift:",nn_distance(pc1,pc3))
 

@@ -143,21 +143,63 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
+        ############# latent shift
+        
+        # with open("data/latent_024","rb") as file:
+        #     l1 = pickle.load(file)
+
+        # with open("data/latent_025","rb") as file:
+        #     l2 = pickle.load(file)
+
+        # pca = PCA()
+        # pca.fit(np.concatenate((l1,l2),axis = 0))
+        
+        center = (1.5,-1,6.25)
+        di1 = data_path+"\\run41\\024.vtu"
+
+        data = data_reader(di1)
+        data = data_to_numpy(data)
+        data = data[:,:4]
+
+        start_df = latent_df(data,3,center,0.7,10,None,model,device,args.dim)
+        m = start_df.near_pc
+        pc1 = m.copy()
+        pc1 = mean_sub(pc1)
+        # print(m.shape)
+
+        center2 = (2.3,-0,6.55)
+
+        target = latent_df(data,3,center2,0.7,10,None,model,device,args.dim)
+        pc2 = target.near_pc.copy()
+        pc2 = mean_sub(pc2)
+        # print(pc2.shape)
+
+        ms = mean_shift(m,target,ite=50)
+        ms.shift()
+        pc3 = target.near_pc.copy()
+        pc3 = mean_sub(pc3)
+
+        # center = target.center
+
+        print("original distance:",nn_distance(pc1,pc2))
+        print("after meanshift:",nn_distance(pc1,pc3))
+
         ############# guided shift
         # first test this on the same frame
-        center = (1.5,-1,6.25)
-        data = data_reader(data_path+r"\run41\024.vtu")
-        data = data_to_numpy(data)
-        data = data[:,:args.dim]
-        df = data_frame(data,3,center,0.7,bins=12)
-        target_pc = df.near_pc.copy()
+        # center = (1.5,-1,6.25)
+        # data = data_reader(data_path+r"\run41\024.vtu")
+        # data = data_to_numpy(data)
+        # data = data[:,:args.dim]
+        # df = data_frame(data,3,center,0.7,bins=1000)
+        # target_pc = df.near_pc.copy()
 
-        # set the start center
-        df.center = (1,-0.5,6)
-        df.update()
-        guide = LatentMax(model,target_pc,device,args.dim)
-        gs = guided_shift(target_pc,df,guide)
-        gs.shift()
+        # # # set the start center
+        # df.center = (2,-0.5,6.55)
+        # df.update()
+        # guide = LatentMax(model,target_pc,device,args.dim)
+        # gs = guided_shift(target_pc,df,guide)
+        # gs.shift()
+
 
         ############################## convert one file to new features
         # filename = data_path + "/run41/024.vtu"

@@ -3,7 +3,7 @@ import numpy as np
 
 import torch
 from torch import optim
-from process_data import to_tensor_list,scatter_3d
+from process_data import prepare_for_model,scatter_3d
 
 
 class LatentMax():
@@ -17,33 +17,47 @@ class LatentMax():
         self.dim = dim
         # change target to sensor list (target was ndarray)
         # scatter_3d(target)
-        target = to_tensor_list([target],device,dim)
+        # self.target = target.copy()
+        target = prepare_for_model([target],device,3,dim)
         encoder = self.model.encode
         self.target_latent = encoder(target)
 
     def take_one_step_to_target(self,data_input):
         # !!!! change data_input to value not tensor
         # scatter_3d(data_input)
-        data_input = to_tensor_list([data_input],self.device,self.dim)
-        data_input[0] = torch.autograd.Variable(data_input[0], requires_grad=True)
+        # print(data_input-self.target)
+        data_input = prepare_for_model([data_input],self.device,3,self.dim)
+        coord = data_input[0][:,:3]
+        attr = data_input[0][:,3]
+        attr = torch.autograd.Variable(attr, requires_grad=True)
         # Define optimizer for the image
         # how does optimizer influence?
         # optimizer = optim.SGD(data_input, lr=0.1)
-        optimizer = optim.Adam(data_input, lr=0.1)
-        optimizer.zero_grad()
-        # Assign create image to a variable to move forward in the model
-        x = data_input
-        encoder = self.model.encode
-        # latent is the latent representation for initial point cloud
-        latent = encoder(x)
-        # Loss function is latent presentation of init pc to target latent
-        # optimize the average for now, still we can optimize every dimension?
-        loss = torch.mean(self.target_latent - latent)
-        # Backward
-        loss.backward(retain_graph=True)
-        # Update image
-        optimizer.step()
-        print(data_input)
+        optimizer = optim.Adam([attr], lr=0.01)
+        original_loss = None
+        while True:
+            optimizer.zero_grad()
+            # Assign create image to a variable to move forward in the model
+            x = [torch.cat((coord,attr[:,None]),axis = 1)]
+            # print(x.shape)
+            encoder = self.model.encode
+            # latent is the latent representation for initial point cloud
+            latent = encoder(x)
+            # Loss function is latent presentation of init pc to target latent
+            # optimize the average for now, still we can optimize every dimension?
+            loss = torch.sqrt(torch.sum((self.target_latent - latent)**2))
+            if original_loss is None:
+                original_loss = loss.item()
+            # Backward
+            loss.backward(retain_graph=True)
+            # Update image
+            optimizer.step()
+            new_pc = data_input[0].detach().numpy()
+            scatter_3d(new_pc)
+            # print(loss.item())
+            if loss.item()< 0.8 * original_loss:
+                print(loss.item())
+                break
         # return ndarray
         new_pc = data_input[0].detach().numpy()
         # scatter_3d(new_pc)

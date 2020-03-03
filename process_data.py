@@ -211,14 +211,25 @@ def scatter_3d(array,vmin=None,vmax=None):
     # ax2.scatter(array2[:,0],array2[:,1],array2[:,2],c=array2[:,3],marker='^',vmin=-1,vmax=1)
     plt.show()
 
-def to_tensor_list(data,device,kept_dim=7):
+def prepare_for_model(data: list,device,coord_dim=3,kept_dim=4,mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02],std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]):
+    tensor_list = []
+    mean = mean[:kept_dim-coord_dim]
+    std = std[:kept_dim-coord_dim]
+    for datum in data:
+        numpy_datum = datum[:,:kept_dim]
+        numpy_datum[:,coord_dim:] = (numpy_datum[:,coord_dim:] - mean)/std
+        numpy_datum[:,:coord_dim] = mean_sub(numpy_datum[:,:coord_dim],coord_dim)
+        tensor = torch.from_numpy(numpy_datum).float().to(device)
+        tensor_list.append(tensor)
+    return tensor_list
+
+def to_tensor_list(data: list,device,kept_dim=4):
     tensor_list = []
     for datum in data:
         numpy_datum = datum[:,:kept_dim]
         tensor = torch.from_numpy(numpy_datum).float().to(device)
         tensor_list.append(tensor)
     return tensor_list
-
 
 def image_to_pointcloud(img, point_size = 1024):
     ndim = len(img.shape)-1
@@ -331,6 +342,10 @@ def collect_children(node):
     elif isinstance(node,KDTree.innernode):
         return np.concatenate((collect_children(node.less),collect_children(node.greater)))
 
+def mean_sub(data,dim=3):
+    mean = np.mean(data[:,:3],axis = 0)
+    data[:,:3] -= mean
+    return data
 
 if __name__ == "__main__":
     # generate data
