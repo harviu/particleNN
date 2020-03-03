@@ -142,7 +142,7 @@ class guided_shift():
         
 
 class mean_shift():
-    def __init__(self,target,data,ite=None,dis=None):
+    def __init__(self,target,data,ite=20,dis=0.01):
         """
         data: data_frame object to search
         target: target point cloud
@@ -174,7 +174,7 @@ class mean_shift():
 
         weights = np.sqrt(target_hist/(data.hist+eps))
 
-        near_bins = self._get_bins(data.near_attr,data.ranges,data.bins)
+        near_bins = self._get_bins(data.near_attr,new_ranges,data.bins)
         
         new_center = np.zeros((len(data.center),))
         w_sum = eps
@@ -214,13 +214,6 @@ class mean_shift():
         return sample_bins
 
     def shift(self):
-        if self.ite == None and self.dis == None:
-            mode = "ite"
-            self.ite = 10
-        elif self.ite != None:
-            mode = "ite"
-        else:
-            mode = "dis"
         i = 0
         while(True):
             # print(i)
@@ -229,14 +222,11 @@ class mean_shift():
             # t1 = datetime.now()
             self.data.set_center((next_center+self.data.center)/2)
             # self.data.set_center(next_center)
+            # self.data.set_range(None)
             self.data.update_hist()
             i+=1
-            if mode == "ite":
-                if i == self.ite:
-                    break
-            else:
-                if np.sqrt(np.sum((center-next_center)**2))<self.dis:
-                    break
+            if i == self.ite or np.sqrt(np.sum((center-next_center)**2))<self.dis:
+                break
         print("Mean_shift_next_center",self.data.center)
         return self.data
 
@@ -255,43 +245,98 @@ def nn_distance(pc1,pc2):
     dis = np.mean(dis)
     return dis
 
+def track_run(path,start,end,init_center,h,bins,model,device,dim,latent=True):
+    center = init_center
+    center_list = []
+    center_list.append(center)
+    data = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(start)))
+    data = data[:,:dim]
+    start_df = latent_df(data,3,center,h,bins,None,model,device,dim)
+    # start_df = data_frame(data,3,center,h,bins,None)
+    m = start_df.near_pc.copy()
+    pc1 = m.copy()
+    pc1 = mean_sub(pc1)
+    # print(center)
+    # scatter_3d(pc1,center=center)
+    for i in range(start,end):
+        data = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(i)))
+        data = data[:,:dim]
+        scatter_3d(data,50,350,threshold=50,center=center)
+
+        data_next = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(i+1)))
+        data_next = data_next[:,:dim]
+
+        if latent:
+            start_df = latent_df(data,3,center,h,bins,None,model,device,dim)
+            target = latent_df(data_next,3,center,h,bins,None,model,device,dim)
+        else:
+            start_df = data_frame(data,3,center,h,bins,None)
+            target = data_frame(data_next,3,center,h,bins,None)
+        
+        # m = start_df.near_pc
+        # pc1 = m.copy()
+        # pc1 = mean_sub(pc1)
+        # scatter_3d(pc1)
+
+        pc2 = target.near_pc.copy()
+        pc2 = mean_sub(pc2)
+        # scatter_3d(pc2)
+
+        print(m.shape)
+
+        ms = mean_shift(m,target,ite=20,dis=0.01)
+        ms.shift()
+        pc3 = target.near_pc.copy()
+        pc3 = mean_sub(pc3)
+        scatter_3d(pc3)
+
+        center = target.center
+        center_list.append(center)
+
+        print("original distance:",nn_distance(pc1,pc2))
+        print("after meanshift:",nn_distance(pc1,pc3))
+    # print(center_list)
+
+
+    
+
 if __name__ == "__main__":
     data_dir = os.environ["data"]
     ############ work on artificial data ############
 
-    # data0 = np.random.rand(100000,3)
-    # data0[:,2] = np.sqrt((data0[:,0]-0.5) **2 + (data0[:,1]-0.5)**2)
-    # # print(data0[:,2])
-    # tar = data_frame(data0,2,(0.5,0.5),0.05,bins=20)
-    # pc1 = np.concatenate((tar.near_coord,tar.near_attr),axis = 1)
-    # plt.scatter(pc1[:,0],pc1[:,1],c=pc1[:,2])
-    # plt.show()
+    data0 = np.random.rand(100000,3)
+    data0[:,2] = np.sqrt((data0[:,0]-0.5) **2 + (data0[:,1]-0.5)**2)
+    # print(data0[:,2])
+    tar = data_frame(data0,2,(0.5,0.5),0.05,bins=20)
+    pc1 = np.concatenate((tar.near_coord,tar.near_attr),axis = 1)
+    plt.scatter(pc1[:,0],pc1[:,1],c=pc1[:,2])
+    plt.show()
     
-    # data1 = np.random.rand(100000,3)
-    # data1[:,2] = np.sqrt((data1[:,0]-0.3) **2 + (data1[:,1]-0.3)**2)
-    # aim = data_frame(data1,2,(0.5,0.5),0.05,bins=20)
-    # pc2 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
-    # plt.scatter(pc2[:,0],pc2[:,1],c=pc2[:,2])
-    # plt.show()
+    data1 = np.random.rand(100000,3)
+    data1[:,2] = np.sqrt((data1[:,0]-0.3) **2 + (data1[:,1]-0.3)**2)
+    aim = data_frame(data1,2,(0.5,0.5),0.05,bins=20)
+    pc2 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
+    plt.scatter(pc2[:,0],pc2[:,1],c=pc2[:,2])
+    plt.show()
 
-    # ms = mean_shift(tar.near_pc,aim,ite=10)
-    # ms.shift()
-    # pc3 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
-    # plt.scatter(pc3[:,0],pc3[:,1],c=pc3[:,2])
-    # plt.show()
+    ms = mean_shift(tar.near_pc,aim,ite=10)
+    ms.shift()
+    pc3 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
+    plt.scatter(pc3[:,0],pc3[:,1],c=pc3[:,2])
+    plt.show()
 
-    # pc1[:,0] -= np.mean(pc1[:,0])
-    # pc1[:,1] -= np.mean(pc1[:,1])
-    # # pc1[:,2] -= np.mean(pc1[:,2])
-    # pc2[:,0] -= np.mean(pc2[:,0])
-    # pc2[:,1] -= np.mean(pc2[:,1])
-    # # pc2[:,2] -= np.mean(pc2[:,2])
-    # pc3[:,0] -= np.mean(pc3[:,0])
-    # pc3[:,1] -= np.mean(pc3[:,1])
-    # # pc3[:,2] -= np.mean(pc3[:,2])
+    pc1[:,0] -= np.mean(pc1[:,0])
+    pc1[:,1] -= np.mean(pc1[:,1])
+    # pc1[:,2] -= np.mean(pc1[:,2])
+    pc2[:,0] -= np.mean(pc2[:,0])
+    pc2[:,1] -= np.mean(pc2[:,1])
+    # pc2[:,2] -= np.mean(pc2[:,2])
+    pc3[:,0] -= np.mean(pc3[:,0])
+    pc3[:,1] -= np.mean(pc3[:,1])
+    # pc3[:,2] -= np.mean(pc3[:,2])
 
-    # print("original distance:",nn_distance(pc1,pc2))
-    # print("after meanshift:",nn_distance(pc1,pc3))
+    print("original distance:",nn_distance(pc1,pc2))
+    print("after meanshift:",nn_distance(pc1,pc3))
     
     #################### latent
 

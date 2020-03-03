@@ -53,7 +53,7 @@ class LatentMax():
             # Update image
             optimizer.step()
             new_pc = data_input[0].detach().numpy()
-            scatter_3d(new_pc)
+            # scatter_3d(new_pc)
             # print(loss.item())
             if loss.item()< 0.8 * original_loss:
                 print(loss.item())

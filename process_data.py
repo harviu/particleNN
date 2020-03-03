@@ -203,10 +203,13 @@ class Loader():
             yield data[i:i+batch_size]
 
 
-def scatter_3d(array,vmin=None,vmax=None):
+def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(array[:,0],array[:,1],array[:,2],c=array[:,3],marker='o',vmin=vmin,vmax=vmax)
+    array = array[array[:,3] > threshold]
+    ax.scatter(array[:,0],array[:,1],array[:,2],c=array[:,3],marker='.',vmin=vmin,vmax=vmax)
+    if center is not None:
+        ax.scatter(center[0],center[1],center[2],c="red",marker='o')
     # ax2 = fig.add_subplot(122,projection='3d',sharex=ax,sharey=ax,sharez=ax)
     # ax2.scatter(array2[:,0],array2[:,1],array2[:,2],c=array2[:,3],marker='^',vmin=-1,vmax=1)
     plt.show()
