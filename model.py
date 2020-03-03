@@ -27,9 +27,7 @@ class VAE(nn.Module):
             nn.Linear(128, 1024),
             nn.LeakyReLU(),
         )
-        self.fc01 = nn.Linear(1024,1024)
-        self.fc10 = nn.Linear(1024,self.vector_length)
-        self.fc11 = nn.Linear(1024,self.vector_length)
+        self.fc01 = nn.Linear(1024,self.vector_length)
 
         self.fc_decode = nn.Sequential(
             nn.Linear(self.vector_length,1024),
