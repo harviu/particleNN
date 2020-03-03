@@ -167,7 +167,7 @@ if __name__ == "__main__":
         pc1 = mean_sub(pc1)
         # print(m.shape)
 
-        center2 = (2.3,-0,6.55)
+        center2 = (0.5,-0,5.25)
 
         target = latent_df(data,3,center2,0.7,10,None,model,device,args.dim)
         pc2 = target.near_pc.copy()
