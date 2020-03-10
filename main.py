@@ -143,7 +143,7 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
-        track_run(data_path+"/run41/",10,30,(3.45,0.6,9.1),0.7,10,model,device,args.dim,True)
+        track_run(data_path+"/run41/",30,60,1,(1,-1,3.75),0.8,10,model,device,args.dim,True)
         ############# latent shift
         
         # with open("data/latent_024","rb") as file:

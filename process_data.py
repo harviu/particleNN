@@ -203,7 +203,7 @@ class Loader():
             yield data[i:i+batch_size]
 
 
-def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None):
+def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None,save=False,fname=None):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     array = array[array[:,3] > threshold]
@@ -212,7 +212,10 @@ def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None):
         ax.scatter(center[0],center[1],center[2],c="red",marker='o')
     # ax2 = fig.add_subplot(122,projection='3d',sharex=ax,sharey=ax,sharez=ax)
     # ax2.scatter(array2[:,0],array2[:,1],array2[:,2],c=array2[:,3],marker='^',vmin=-1,vmax=1)
-    plt.show()
+    if save:
+        plt.savefig(fname)
+    else:
+        plt.show()
 
 def prepare_for_model(data: list,device,coord_dim=3,kept_dim=4,mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02],std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]):
     tensor_list = []
