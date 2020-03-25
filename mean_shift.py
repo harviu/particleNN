@@ -152,12 +152,8 @@ class mean_shift():
         self.ite = ite
         self.dis = dis
 
-    def next_center(self):
-
-        data = self.data
-        target = self.target
+    def adaptive_range(self,data,target):
         coord_dim = self.data.coord_dim
-        
         ### adaptive range 
         data_rmax = np.max(data.near_attr,axis=0)
         data_rmin = np.min(data.near_attr,axis=0)
@@ -167,10 +163,23 @@ class mean_shift():
         new_rmax = np.where(data_rmax>target_rmax,data_rmax,target_rmax)
         new_ranges = np.stack((new_rmin,new_rmax),axis=-1)
         # new_ranges = ((0,MAX),(-1,1),(-1,1),(-1,1))
+
+        # set new range
         data.set_range(new_ranges)
         data.update_hist()
+
         target_center = np.mean(target[:,:coord_dim],axis=0)
         target_hist = weighted_hist(target[:,:coord_dim],target[:,coord_dim:],target_center,data.h,data.bins,new_ranges)
+
+        return target_hist, new_ranges
+
+    def next_center(self):
+
+        data = self.data
+        target = self.target
+        coord_dim = self.data.coord_dim
+        
+        target_hist, new_ranges = self.adaptive_range(data,target)
 
         weights = np.sqrt(target_hist/(data.hist+eps))
 
@@ -189,7 +198,7 @@ class mean_shift():
 
         new_center /= w_sum
         
-        print(new_center)
+        # print(new_center)
         return new_center
 
     def _get_bins(self,samples, ranges, bins):
@@ -216,14 +225,31 @@ class mean_shift():
     def shift(self):
         i = 0
         while(True):
-            # print(i)
+            #calcualte initial similarity 
+            target_hist, new_ranges = self.adaptive_range(self.data,self.target)
+            init_similarity = hist_similarity(target_hist,self.data.hist)
+            print(init_similarity)
+            
             center = self.data.center
             next_center = self.next_center()
+
+            count = 0 
+            while (True):
+                #calculate new similarity
+                self.data.set_center(next_center)
+                self.data.update_hist()
+                target_hist, new_ranges = self.adaptive_range(self.data,self.target)
+                new_similarity = hist_similarity(target_hist,self.data.hist)
+                count += 1
+                if (new_similarity > init_similarity or count == 13):
+                    break
+                else:
+                    next_center = (center + next_center)/2
+
             # t1 = datetime.now()
-            self.data.set_center((next_center+self.data.center)/2)
-            # self.data.set_center(next_center)
-            # self.data.set_range(None)
-            self.data.update_hist()
+            # self.data.set_center((next_center+self.data.center)/2)
+            # self.data.update_hist()
+
             i+=1
             if i == self.ite or np.sqrt(np.sum((center-next_center)**2))<self.dis:
                 break
@@ -231,6 +257,8 @@ class mean_shift():
         return self.data
 
 def hist_similarity(h1,h2):
+    h1 = h1.reshape(-1)
+    h2 = h2.reshape(-1)
     return np.sum(np.sqrt(h1*h2))
 
 def nn_distance(pc1,pc2):
