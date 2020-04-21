@@ -126,16 +126,14 @@ if __name__ == "__main__":
                 pc1 = data[11].cpu()
                 pc2 = recon_batch[11].cpu()
                 pca = PCA(n_components=2)
-                pca.fit(np.concatenate((pc1,pc2),axis=0))
-                pc1_embedded = pca.transform(pc1)
-                pc2_embedded = pca.transform(pc2)
-                print(pc1_embedded.shape)
-                print(pc2_embedded.shape)
+                # pca.fit(np.concatenate((pc1,pc2),axis=0))
+                # pc1_embedded = pca.transform(pc1)
+                # pc2_embedded = pca.transform(pc2)
                 # plt.scatter(pc1_embedded[:,0],pc1_embedded[:,1])
                 # plt.show()
-                scatter_3d(pc1)
                 # plt.scatter(pc2_embedded[:,0],pc2_embedded[:,1])
                 # plt.show()
+                scatter_3d(pc1)
                 scatter_3d(pc2)
     elif args.phase == 0:
         loader = Loader(data_file,args.batch_size)
@@ -143,7 +141,49 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
-        track_run(data_path+"/run41/",30,60,1,(1,-1,3.75),0.8,1000,model,device,args.dim,False)
+        track_run(data_path+"/run41/",15,20,1,(2, -1.2, 8.2),0.8,10,model,device,args.dim,True)
+
+        # vtk_data = data_reader(data_path+"/run01/020.vtu")
+        # # print(vtk_data)
+        # numpy_data = data_to_numpy(vtk_data)
+        # print(numpy_data.shape)
+        # kdtree = KDTree(numpy_data[:,:3],1000)
+        # x = np.arange(-5,5,0.5)
+        # y = np.arange(-5,5,0.5)
+        # z = np.arange(0,10,0.5)
+        # index = []
+        # for xx in x:
+        #     for yy in y:
+        #         for zz in z:
+        #             if (xx**2 + yy**2 <25):
+        #                 index.append((xx,yy,zz))
+
+        
+        # points = kdtree.query_ball_point((-0.9,-1.2,6.4),0.8)
+        # # print(points)
+        # numpy_data = numpy_data[:,:4]
+        # index = numpy_data[:,:3][points]
+        # pc = numpy_data[points]  
+        # points = kdtree.query_ball_point(index,0.7)
+        # data = []
+        # for p in points:
+        #     d = numpy_data[p]
+        #     d = mean_sub(d)
+        #     d[:,3] = (d[:,3] - 23.946)/55.08
+        #     data.append(d)
+        # data = to_tensor_list(data,device)
+        # with torch.no_grad():
+        #     latent = model.encode(data)
+        #     latent = latent.cpu().numpy()
+
+        # sc0 = np.concatenate((index,latent[:,0][:,None]),axis=1)
+        # sc1 = np.concatenate((index,latent[:,1][:,None]),axis=1)
+        # # print(sc.shape)
+        # scatter_3d(pc)
+        # scatter_3d(sc0)
+        # scatter_3d(sc1)
+        
+            
         ############# latent shift
         
         # with open("data/latent_024","rb") as file:

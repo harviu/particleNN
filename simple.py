@@ -6,14 +6,29 @@ from vtk.util import numpy_support
 import sys, os, numpy
 
 
-if __name__ =="__main__":
-    if len(sys.argv) < 2:
-        print('creates one PNG image visualizing each of the vtu files passed as arguments')
-        print('')
-        print('usage:' + sys.argv[0] + "<file1>.vtu [<file2>.vtu ...]")
-        print()
-        sys.exit(0)
+def ball_actor():
+    ball = vtkSphereSource()
+    ball.SetCenter(-0.8, -1, 6.3)
+    ball.SetRadius(0.8)
+    ball.SetThetaResolution(100)
+    ball.SetPhiResolution(100)
 
+    mapper = vtkPolyDataMapper()
+    mapper.SetInputConnection(ball.GetOutputPort())
+
+    actor = vtkActor()
+    actor.SetMapper(mapper)
+
+    # transform = vtkTransform()
+    # transform.PostMultiply()
+    # transform.RotateX(90.0)
+    # transform.Translate(0, 0, 5)
+    # actor.SetUserTransform(transform)
+
+    prop = actor.GetProperty()
+    prop.SetOpacity(0.1)
+
+    return actor
 
 def cylinder_actor():
     cylinder = vtkCylinderSource()
@@ -33,7 +48,7 @@ def cylinder_actor():
     transform.RotateX(90.0)
     transform.Translate(0, 0, 5)
 
-    actor.SetUserTransform(transform);
+    actor.SetUserTransform(transform)
 
     prop = actor.GetProperty()
     prop.SetOpacity(0.2)
@@ -70,7 +85,7 @@ def particles_actor(reader,camera):
 
     threshold = vtkThreshold()
     threshold.SetInputConnection(mask.GetOutputPort())
-    threshold.ThresholdByUpper(0)
+    threshold.ThresholdByUpper(50)
     # threshold.ThresholdByLower(2)
 
     geom = vtkGeometryFilter()
@@ -116,6 +131,7 @@ def show(filename):
 
     renderer.AddActor(particles_actor(reader,camera))
     renderer.AddActor(cylinder_actor())
+    # renderer.AddActor(ball_actor())
     renderer.AddActor(text_actor())
 
     window = vtkRenderWindow()
@@ -142,3 +158,13 @@ def show(filename):
     window.Render()
     renWinInter.Start()
 
+
+
+if __name__ =="__main__":
+    # if len(sys.argv) < 2:
+    #     print('creates one PNG image visualizing each of the vtu files passed as arguments')
+    #     print('')
+    #     print('usage:' + sys.argv[0] + "<file1>.vtu [<file2>.vtu ...]")
+    #     print()
+    #     sys.exit(0)
+    show(r"D:\OneDrive - The Ohio State University\data\2016_scivis_fpm\0.44\run01\020.vtu")

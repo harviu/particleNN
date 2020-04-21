@@ -77,7 +77,7 @@ class Generator():
         print()
         print("Process complete, {} samples generated".format(len(data)))
         
-    def _sample_one_file(self,filename,cut_level=4,num_sample=1, r=0.7,reduction_layer=4,reduction_ratio=1/8):
+    def _sample_one_file(self,filename,cut_level=4,num_sample=1, r=0.7):
         data = data_reader(filename)
         data = data_to_numpy(data)
         rmin = np.min(data,axis = 0)
@@ -349,8 +349,8 @@ def collect_children(node):
         return np.concatenate((collect_children(node.less),collect_children(node.greater)))
 
 def mean_sub(data,dim=3):
-    mean = np.mean(data[:,:3],axis = 0)
-    data[:,:3] -= mean
+    mean = np.mean(data[:,:dim],axis = 0)
+    data[:,:dim] -= mean
     return data
 
 if __name__ == "__main__":
@@ -360,6 +360,7 @@ if __name__ == "__main__":
         data_dir = data_dir + "\\2016_scivis_fpm\\0.44"
     except KeyError:
         data_dir = "../data/0.44"
+    # print(data_reader(data_dir+"/run01/010.vtu"))
     # generator = Generator(data_dir)
     # generator.generate_new("data_sample")
     # t1 = datetime.now()

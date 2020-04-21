@@ -44,7 +44,6 @@ class data_frame():
         self.hist = weighted_hist(self.near_coord,self.near_attr, self.center,self.h,self.bins,self.ranges)
 
 
-    
 class latent_df(data_frame):
     def __init__(self,data,n_channel,center,h,bins,ranges,model,device,dim,pca=None):
         self.model = model
@@ -230,38 +229,42 @@ class mean_shift():
         return sample_bins
 
     def shift(self):
+        #calcualte initial similarity 
+        target_hist, new_ranges = self.adaptive_range(self.data,self.target)
+        init_similarity = hist_similarity(target_hist,self.data.hist)
+        print(init_similarity)
+        
+        center = self.data.center
+        next_center = self.next_center()
+        x = np.arange(-1.6,1.6,0.16)
+        y = np.arange(-1.6,1.6,0.16)
+        z = np.arange(-1.6,1.6,0.16)
+        index = []
+        for xx in x:
+            for yy in y:
+                for zz in z:
+                    index.append(np.array([xx,yy,zz])+center)
+        similarity = []
         i = 0
-        while(True):
-            #calcualte initial similarity 
+        for next_center in index:
+            #calculate new similarity
+            self.data.set_center(next_center)
+            self.data.update_hist()
             target_hist, new_ranges = self.adaptive_range(self.data,self.target)
-            init_similarity = hist_similarity(target_hist,self.data.hist)
-            print(init_similarity)
-            
-            center = self.data.center
-            next_center = self.next_center()
-
-            count = 0 
-            while (True):
-                #calculate new similarity
-                self.data.set_center(next_center)
-                self.data.update_hist()
-                target_hist, new_ranges = self.adaptive_range(self.data,self.target)
-                new_similarity = hist_similarity(target_hist,self.data.hist)
-                count += 1
-                if (new_similarity > init_similarity or count == 13):
-                    break
-                else:
-                    next_center = (center + next_center)/2
-
-            # t1 = datetime.now()
-            # self.data.set_center((next_center+self.data.center)/2)
-            # self.data.update_hist()
-
+            new_similarity = hist_similarity(target_hist,self.data.hist)
+            similarity.append(new_similarity)
             i+=1
-            if i == self.ite or np.sqrt(np.sum((center-next_center)**2))<self.dis:
-                break
-        print("Mean_shift_next_center",self.data.center)
-        return self.data
+            print(i)
+        print(len(similarity))
+        vtk_similarity = numpy_support.numpy_to_vtk(np.array(similarity),False,VTK_FLOAT)
+        img_vtk = vtkStructuredPoints()
+        img_vtk.SetDimensions((20,20,20))
+        img_vtk.GetPointData().SetScalars(vtk_similarity)
+
+        writer = vtkXMLImageDataWriter()
+        writer.SetFileName("test.vti")
+        writer.SetInputData(img_vtk)
+        writer.Write()
 
 def hist_similarity(h1,h2):
     h1 = h1.reshape(-1)
@@ -293,10 +296,10 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
     # pc1 = mean_sub(pc1)
     # print(center)
     # scatter_3d(pc1,center=center)
-    for i in range(start,end+step,step):
+    for i in range(start,end+step-1,step):
         data = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(i)))
         data = data[:,:dim]
-        scatter_3d(data,50,350,50,center,False)
+        # scatter_3d(data,50,350,50,center,False)
         # scatter_3d(data,50,350,50,center,True,"{:03d}.png".format(i))
 
         data_next = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(i+step)))
@@ -337,93 +340,3 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
         print("after meanshift:",dis2)
     # print(center_list)
 
-
-    
-
-if __name__ == "__main__":
-    data_dir = os.environ["data"]
-    ############ work on artificial data ############
-
-    # data0 = np.random.rand(100000,3)
-    # data0[:,2] = np.sqrt((data0[:,0]-0.5) **2 + (data0[:,1]-0.5)**2)
-    # # print(data0[:,2])
-    # tar = data_frame(data0,2,(0.5,0.5),0.05,bins=20)
-    # pc1 = np.concatenate((tar.near_coord,tar.near_attr),axis = 1)
-    # plt.scatter(pc1[:,0],pc1[:,1],c=pc1[:,2])
-    # plt.show()
-    
-    # data1 = np.random.rand(100000,3)
-    # data1[:,2] = np.sqrt((data1[:,0]-0.3) **2 + (data1[:,1]-0.3)**2)
-    # aim = data_frame(data1,2,(0.5,0.5),0.05,bins=20)
-    # pc2 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
-    # plt.scatter(pc2[:,0],pc2[:,1],c=pc2[:,2])
-    # plt.show()
-
-    # ms = mean_shift(tar.near_pc,aim,ite=10)
-    # ms.shift()
-    # pc3 = np.concatenate((aim.near_coord,aim.near_attr),axis = 1)
-    # plt.scatter(pc3[:,0],pc3[:,1],c=pc3[:,2])
-    # plt.show()
-
-    # pc1[:,0] -= np.mean(pc1[:,0])
-    # pc1[:,1] -= np.mean(pc1[:,1])
-    # # pc1[:,2] -= np.mean(pc1[:,2])
-    # pc2[:,0] -= np.mean(pc2[:,0])
-    # pc2[:,1] -= np.mean(pc2[:,1])
-    # # pc2[:,2] -= np.mean(pc2[:,2])
-    # pc3[:,0] -= np.mean(pc3[:,0])
-    # pc3[:,1] -= np.mean(pc3[:,1])
-    # # pc3[:,2] -= np.mean(pc3[:,2])
-
-    # print("original distance:",nn_distance(pc1,pc2))
-    # print("after meanshift:",nn_distance(pc1,pc3))
-
-    ############
-    # t1 = datetime.now()
-
-    center = (1.5,-1,6.25)
-    di1 = data_dir+"\\2016_scivis_fpm\\0.44\\run41\\024.vtu"
-    # di2 = data_dir+"\\2016_scivis_fpm\\0.44\\run41\\025.vtu"
-
-    data = data_reader(di1)
-    data = data_to_numpy(data)
-    data = data[:,:4]
-
-    # data2 = data_reader(di2)
-    # data2 = data_to_numpy(data2)
-    # data2 = data2[:,:4]
-
-    model = data_frame(data,3,center,0.7,bins=1000)
-    m = model.near_pc
-    pc1 = model.near_pc.copy()
-    pc1[:,0] -= np.mean(pc1[:,0])
-    pc1[:,1] -= np.mean(pc1[:,1])
-    pc1[:,2] -= np.mean(pc1[:,2])
-    # scatter_3d(pc1)
-
-    center2 = (1.2,-0.5,6)
-
-    target = data_frame(data,3,center2,0.7,bins=1000)
-    pc2 = target.near_pc.copy()
-    pc2[:,0] -= np.mean(pc2[:,0])
-    pc2[:,1] -= np.mean(pc2[:,1])
-    pc2[:,2] -= np.mean(pc2[:,2])
-    # scatter_3d(pc2)
-
-    ms = mean_shift(m,target,ite=30,dis=0.001)
-    ms.shift()
-    pc3 = np.concatenate((target.near_coord,target.near_attr),axis = 1)
-    pc3[:,0] -= np.mean(pc3[:,0])
-    pc3[:,1] -= np.mean(pc3[:,1])
-    pc3[:,2] -= np.mean(pc3[:,2])
-    # scatter_3d(pc3)
-
-    center = target.center
-
-    # print(pc1.shape)
-    print("original distance:",nn_distance(pc1,pc2))
-    print("after meanshift:",nn_distance(pc1,pc3))
-
-    # t2 = datetime.now()
-    # print(t2-t1)
-    # ###############
