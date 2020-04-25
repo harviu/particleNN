@@ -141,7 +141,19 @@ if __name__ == "__main__":
             train(epoch)
             test(epoch)
     elif args.phase == 2:
-        track_run(data_path+"/run41/",15,20,1,(2, -1.2, 8.2),0.8,10,model,device,args.dim,True)
+        # track_run(data_path+"/run41/",15,20,1,(2, -1.2, 8.2),0.5,1000,model,device,args.dim,False)
+        # track_run(data_path+"/run41/",15,20,1,(3.7, 0.7, 7.9),0.5,10,model,device,args.dim,True)
+        #best case
+        print("with")
+        track_run(data_path+"/run41/",10,19,1,(3.7, 0.7, 9.1),0.5,10,model,device,args.dim,True)
+        print("without")
+        track_run(data_path+"/run41/",10,19,1,(3.7, 0.7, 9.1),0.5,1000,model,device,args.dim,False)
+        # track_run(data_path+"/run40/",10,20,1,(3.7, 0.7, 9.1),0.5,10,model,device,args.dim,True)
+        # track_run(data_path+"/run40/",10,20,1,(1, -3.4, 9.2),0.5,10,model,device,args.dim,True)
+        # track_run(data_path+"/run32/",20,30,1,(3.7, 0.5, 6.5),0.5,10,model,device,args.dim,True)
+        # track_run(data_path+"/run05/",20,30,1,(-0.5, -3.7, 6.5),0.5,1000,model,device,args.dim,False)
+        # track_run(data_path+"/run05/",20,30,1,(4.2, -2.1, 7),0.5,10,model,device,args.dim,True)
+        # track_run(data_path+"/run05/",15,30,1,(4.2, -2.1, 8.2),0.5,1000,model,device,args.dim,False)
 
         # vtk_data = data_reader(data_path+"/run01/020.vtu")
         # # print(vtk_data)

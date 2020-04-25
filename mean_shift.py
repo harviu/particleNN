@@ -235,7 +235,7 @@ class mean_shift():
             #calcualte initial similarity 
             target_hist, new_ranges = self.adaptive_range(self.data,self.target)
             init_similarity = hist_similarity(target_hist,self.data.hist)
-            print(init_similarity)
+            # print(init_similarity)
             
             center = self.data.center
             next_center = self.next_center()
@@ -293,10 +293,10 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
     # pc1 = mean_sub(pc1)
     # print(center)
     # scatter_3d(pc1,center=center)
-    for i in range(start,end+step,step):
+    for i in range(start,end+step-1,step):
         data = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(i)))
         data = data[:,:dim]
-        scatter_3d(data,50,350,50,center,False)
+        # scatter_3d(data,50,350,50,center,False)
         # scatter_3d(data,50,350,50,center,True,"{:03d}.png".format(i))
 
         data_next = data_to_numpy(data_reader(path+"\{:03d}.vtu".format(i+step)))
@@ -318,9 +318,6 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
         pc2 = mean_sub(pc2)
         # scatter_3d(pc2)
 
-        # print(m.shape)
-        print(center)
-
         ms = mean_shift(m,target,ite=20,dis=0.01)
         ms.shift()
         pc3 = target.near_pc.copy()
@@ -333,8 +330,8 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
         center = target.center
         center_list.append(center)
 
-        print("original distance:",dis1)
-        print("after meanshift:",dis2)
+        # print("original distance:",dis1)
+        # print("after meanshift:",dis2)
     # print(center_list)
 
 
