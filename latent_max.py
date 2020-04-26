@@ -3,7 +3,7 @@ import numpy as np
 
 import torch
 from torch import optim
-from process_data import prepare_for_model,scatter_3d
+from process_data import scatter_3d,normalize
 
 
 class LatentMax():
@@ -18,7 +18,7 @@ class LatentMax():
         # change target to sensor list (target was ndarray)
         # scatter_3d(target)
         # self.target = target.copy()
-        target = prepare_for_model([target],device,3,dim)
+        target = normalize([target],device,3,dim)
         encoder = self.model.encode
         self.target_latent = encoder(target)
 
@@ -26,7 +26,7 @@ class LatentMax():
         # !!!! change data_input to value not tensor
         # scatter_3d(data_input)
         # print(data_input-self.target)
-        data_input = prepare_for_model([data_input],self.device,3,self.dim)
+        data_input = normalize([data_input],self.device,3,self.dim)
         coord = data_input[0][:,:3]
         attr = data_input[0][:,3]
         attr = torch.autograd.Variable(attr, requires_grad=True)

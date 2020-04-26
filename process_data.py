@@ -12,63 +12,54 @@ from mpl_toolkits.mplot3d import Axes3D
 from PIL import Image
 from scipy.spatial import KDTree
 import torch
+from yt.utilities.sdf import SDFRead
 
 
 class Generator():
     """
     generate dataset from the raw data directory
     """
-    def __init__(self,directory,mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02],std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]):
+    def __init__(self,directory):
         """
         generate random file list
         """
         file_list = []
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for filename in filenames:
-                if filename.endswith('.vtu'):
+                print()
+                if "ds14" in filename.split('_'):
                     inp = os.sep.join([dirpath, filename])
                     file_list.append(inp)
         random.shuffle(file_list)
         self.file_list = file_list
-        self.mean = mean
-        self.std = std
 
     def __len__(self):
         return len(self.file_list)
 
-    def mean(self):
+    def calc_mean(self):
         length = 0
         total = np.zeros((4,))
         i = 0
+        max = np.zeros((10,))
+        min = np.full((10,),1000)
         for filename in self.file_list:
             data = data_reader(filename)
             data = data_to_numpy(data)
-            total += np.sum(data[:,3:],axis = 0)
-            length += len(data)
+            batch_max = np.max(data,axis = 0)
+            batch_min = np.min(data,axis = 0)
+            max = np.where(batch_max>max,batch_max,max)
+            min = np.where(batch_min<min,batch_min,min)
             i+=1
             print("{}/{}".format(i,len(self)),end='\r')
-        print("mean: ",total/length)
-
-    def std(self,mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02]):
-        length = 0
-        total = np.zeros((4,))
-        i = 0
-        for filename in self.file_list:
-            data = data_reader(filename)
-            data = data_to_numpy(data)
-            data = data[:,3:]
-            data = (data - mean) ** 2
-            total += np.sum(data,axis = 0)
-            length += len(data)
-            i+=1
-            print("{}/{}".format(i,len(self)),end='\r')
-        print("std: ",np.sqrt(total/length))
+        print("max: ",max)
+        print("min: ",min)
 
     def generate_new(self,filename):
         data = []
         for i,file in enumerate(self.file_list):
             batch = self._sample_one_file(file)
             data += batch
+            # print(len(data),data[0].shape)
             print("{}/{}".format(i+1,len(self.file_list)),end='\r')
             # print()
             # print(len(data))
@@ -77,18 +68,18 @@ class Generator():
         print()
         print("Process complete, {} samples generated".format(len(data)))
         
-    def _sample_one_file(self,filename,cut_level=4,num_sample=1, r=0.7):
+    def _sample_one_file(self,filename,cut_level=4,num_sample=50, r=0.6):
         data = data_reader(filename)
         data = data_to_numpy(data)
+        data = normalize(data)
         rmin = np.min(data,axis = 0)
         rmax = np.max(data,axis = 0)
         coord = data[:,:3]
         attr = data[:,3:]
-        attr = (attr - self.mean)/self.std
         attr_dim = attr.shape[1]
 
         sys.setrecursionlimit(10000)
-        attr_kd = KDTree(attr,10000)
+        attr_kd = KDTree(attr,1000)
         nodes = nodes_at_level(attr_kd.tree,cut_level)
         sample = []
         # print("number_of_sample:",len(nodes))
@@ -96,93 +87,34 @@ class Generator():
             children = collect_children(node)
             node_sample = []
             s = np.random.permutation(children)
+
+            # sample = sample +list(s[:num_sample])
+
             for ss in s:
                 c = coord[ss]
                 # check c not in the padding area
-                if c[2] > r and c[2]<(10-r) and (c[0]**2 + c[1] **2) < (5-r) ** 2:
+                if c[0] > r and c[0]<(62.5-r) and c[1] > r and c[1]<(62.5-r) and c[2] > r and c[2]<(62.5-r):
                     node_sample.append(ss)
                     if len(node_sample) == num_sample:
                         sample = sample + node_sample
                         break
         sample = np.array(sample).reshape(-1)
-        coord_kd = KDTree(coord)
+        coord_kd = KDTree(coord,1000)
+        # print(len(sample))
+
+        # knn = coord_kd.query(coord[sample],r)
+        # knn = list(data[knn[1]])
         
         ball = coord_kd.query_ball_point(coord[sample],r=r)
         batch = []
+        i=0
         for b in ball:
             a = attr[b]
             c = coord[b]
+            c -= coord[sample[i]]
             batch.append(np.concatenate((c,a),axis=-1))
+            i+=1
         return batch
-
-            # scatter_3d(np.concatenate((c,a),axis=-1),vmin=-2,vmax=2)
-        # for i in range(len(ball)):
-        #     points = point_data[ball[i]]
-        #     points = points - center[i]
-        #     points[:,:3] /= r #normalize dim0,1,2 to [-1,1]
-        #     batch.append(points)
-
-        
-        # sign = [0,0,0,0]
-        # acond = np.full((attr.shape[1],split,attr.shape[0]),True)
-        # for d in range(attr.shape[1]):
-        #     dmax = rmax[3+d]
-        #     dmin = rmin[3+d]
-        #     for s in range(split):
-        #         start = s*(dmax-dmin)/split + dmin
-        #         end = (s+1)*(dmax-dmin)/split + dmin
-        #         acond[d,s] = (attr[:,d] >= start) & (attr[:,d] <= end)
-        # total_l = 0
-        # for s in range(split ** attr.shape[1]):
-        #     for d in range(attr.shape[1]):
-        #         sign[d] = s % split
-        #         s //= split
-        #     cond = np.full((attr.shape[0]),True)
-        #     for j in range(len(sign)):
-        #         cond = cond & acond[j,sign[j]]
-
-            # print(len(data[cond]))
-
-        # print(total_l,len(data))
-                
-
-        # for d in range(attr.shape[1]):
-        #     print(d)
-        #     for s in range(split):
-        #         print(s)
-        #         start = s*(dmax-dmin)/split + dmin
-        #         end = (s+1)*(dmax-dmin)/split + dmin
-        #         acond = (attr[:,d] > start) & (attr[:,d] < end)
-        #         print(len(data[acond & ccond]))
-
-
-    def generate(self,filename, n_sample=60000 ,k = 128, r=0.5, dim = 4, mode='ball'):
-        """
-        generate dataset
-        """
-        point_per_file = n_sample // len(self.file_list)
-        overflow = n_sample - point_per_file * len(self.file_list)
-        
-        file_id = 0
-        batch = []
-        
-        for file in self.file_list:
-            data = data_reader(file)
-            num_points = data.GetNumberOfPoints()
-            if file_id < overflow:
-                idx = np.random.rand(point_per_file+1)
-            else:
-                idx = np.random.rand(point_per_file)
-            idx = (idx * num_points).astype(np.int)
-            batch+=list(sample_around(idx,data,k,r,dim,mode))
-            print("{}/{} processed".format(file_id+1,len(self.file_list)),end="\r")
-
-            file_id += 1
-
-        batch = np.array(batch)
-        np.save(filename,batch)
-        print()
-        print("Process complete, {} samples generated".format(len(batch)))
 
 class Loader():
     """
@@ -217,17 +149,15 @@ def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None,save=Fals
     else:
         plt.show()
 
-def prepare_for_model(data: list,device,coord_dim=3,kept_dim=4,mean=[2.39460057e+01, -4.29336209e-03, 9.68809421e-04, 3.44706680e-02],std=[55.08245731,  0.32457581,  0.32332313,  0.6972805]):
+def normalize(data,coord_dim=3,kept_dim=4,mean=[ -2.46606519e+03, -2.76064209e+03, -2.58863428e+03, -1.71356348e+04, -2.00398145e+04, -2.00960469e+04, -6.92802200e+06] \
+    ,std=[ 2.78081812e+03, 2.97912305e+03, 2.69918921e+03, 1.93245723e+04, 2.00338730e+04, 1.79736328e+04, 6.38445625e+05]):
+    #treat std as max, mean as min
+    mean = np.array(mean)
+    std = np.array(std)
     tensor_list = []
-    mean = mean[:kept_dim-coord_dim]
-    std = std[:kept_dim-coord_dim]
-    for datum in data:
-        numpy_datum = datum[:,:kept_dim]
-        numpy_datum[:,coord_dim:] = (numpy_datum[:,coord_dim:] - mean)/std
-        numpy_datum[:,:coord_dim] = mean_sub(numpy_datum[:,:coord_dim],coord_dim)
-        tensor = torch.from_numpy(numpy_datum).float().to(device)
-        tensor_list.append(tensor)
-    return tensor_list
+    assert len(mean) == kept_dim-coord_dim
+    data[:,coord_dim:kept_dim] = (data[:,coord_dim:kept_dim] - mean)/(std-mean)
+    return data
 
 def to_tensor_list(data: list,device,kept_dim=4):
     tensor_list = []
@@ -254,71 +184,22 @@ def image_to_pointcloud(img, point_size = 1024):
 
 
 def data_reader(filename):
-    reader = vtkXMLUnstructuredGridReader()
-    reader.SetFileName(filename)
-    reader.Update()
-    data = reader.GetOutput()
+    data = SDFRead(filename)
     return data
 
-def sample_around(idx, data,k = 128, r=0.5, dim = 4, mode='ball'):
-    """
-    sample around idx(num_center * point_dim) in data with parameters
-    data: vtk data
-    dimensions 0,1,2 are xyz coordinates
-    dimension 3 is concentration value max = 357.19, min = 0.0 (normalized)
-    dimensions 4,5,6 are velocity value
-    """
-    coord = numpy_support.vtk_to_numpy(data.GetPoints().GetData())
-    if dim == 3:
-        point_data = coord
-    else:
-        concen = numpy_support.vtk_to_numpy(data.GetPointData().GetArray(0))[:,None]
-        concen = (concen/357.19)*2-1 #normalize concentration value t0 [-1,1]
-        if dim == 4:
-            point_data = np.concatenate((coord,concen),axis=-1)
-        else:
-            velocity = numpy_support.vtk_to_numpy(data.GetPointData().GetArray(1))
-            if dim == 7:
-                point_data = np.concatenate((coord,concen,velocity),axis=-1)
-            else:
-                raise ValueError
 
-    center=np.expand_dims(point_data[idx],1)
-    center[:,:,3:] = 0
-
-    sys.setrecursionlimit(10000)
-    kd = KDTree(coord,leafsize=100)
-    if mode == 'knn':
-        # no normalization yet...
-        knn = kd.query(coord[idx],k=k)
-        points = point_data[knn[1]]
-        points = points - center
-        return points
-    elif mode == 'ball':
-        ball = kd.query_ball_point(coord[idx],r=r)
-        batch = []
-        for i in range(len(ball)):
-            points = point_data[ball[i]]
-            points = points - center[i]
-            points[:,:3] /= r #normalize dim0,1,2 to [-1,1]
-            batch.append(points)
-        return batch
-
-def sample_all_from_file(filename,k = 128, r=0.5, dim = 4, mode='ball'):
-    data = data_reader(filename)
-    num_points = data.GetNumberOfPoints()
-
-    idx = np.arange(num_points)
-    sample = sample_around(idx,data,k,r,dim,mode)
-
-    return sample
     
-def data_to_numpy(vtk_data):
-    coord = numpy_support.vtk_to_numpy(vtk_data.GetPoints().GetData())
-    concen = numpy_support.vtk_to_numpy(vtk_data.GetPointData().GetArray(0))[:,None]
-    velocity = numpy_support.vtk_to_numpy(vtk_data.GetPointData().GetArray(1))
-    point_data = np.concatenate((coord,concen,velocity),axis=-1)
-    return point_data
+def data_to_numpy(particles):
+    h_100 = particles.parameters['h_100']
+    width = particles.parameters['L0']
+    cosmo_a = particles.parameters['a']
+    kpc_to_Mpc = 1./1000
+
+    numpy_data = np.array(list(particles.values())[2:-1]).T
+
+    convert_to_cMpc = h_100 * kpc_to_Mpc / cosmo_a 
+    numpy_data[:,:3] = numpy_data[:,:3] * convert_to_cMpc + 31.25
+    return numpy_data
 
 
 def nodes_at_level(root,level):
@@ -355,15 +236,21 @@ def mean_sub(data,dim=3):
 
 if __name__ == "__main__":
     # generate data
-    try:
-        data_dir = os.environ['data']
-        data_dir = data_dir + "\\2016_scivis_fpm\\0.44"
-    except KeyError:
-        data_dir = "../data/0.44"
-    # print(data_reader(data_dir+"/run01/010.vtu"))
-    # generator = Generator(data_dir)
-    # generator.generate_new("data_sample")
+    data_env = os.environ['data']
+    data_dir = data_env + "\\ds14_scivis_0128\\raw"
+    # except KeyError:
+    #     data_dir = "../data/0.44"
+    generator = Generator(data_dir)
+    generator.generate_new(data_env+"\cosmology_ball_more")
     # t1 = datetime.now()
+    # data = np.load(data_env+"/datanew.npy",allow_pickle=True)
+    # print(data[0][3])
+    # for d in data:
+    #     # d[:,:3] /= 62.5
+    #     mean_position = np.mean(d[:,:3],axis=0)
+    #     d[:,:3] -= mean_position
+    # np.save(data_env+"/new",data)
+    
 
     # generator._sample_one_file(generator.file_list[1])
 
@@ -375,7 +262,6 @@ if __name__ == "__main__":
     # coord = data[:,:3]
     # attr = data[:,3:]
     # print(len(coord))
-    # # attr = (attr - self.mean)/self.std
     # # attr_dim = attr.shape[1]
 
     # # sys.setrecursionlimit(10000000)
