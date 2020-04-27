@@ -60,7 +60,7 @@ class latent_df(data_frame):
         self.data = np.concatenate((data,latent),axis=1)
         self.coord = self.data[:,:n_channel]
         self.attr = self.data[:,n_channel:]
-        self.kd = KDTree(self.coord,1000)
+        self.kd = KDTree(self.coord,100)
         self.bins = bins
         self.h = h
         self.coord_dim = n_channel
@@ -83,7 +83,11 @@ class latent_df(data_frame):
                 not_cal.append(n)
                 self.latent_mask[n] = True
         coord = self.coord[not_cal]
-        t = self.kd.query_ball_point(coord,0.6)
+        # print(len(coord))
+        # t0 = datetime.now()
+        _,t = self.kd.query(coord,256)
+        # t1 = datetime.now()
+        # print(t1-t0)
         if len(t) > 0:
             x = []
             for tt in t:
@@ -203,7 +207,6 @@ class mean_shift():
 
         new_center /= w_sum
         
-        # print(new_center)
         return new_center
 
     def _get_bins(self,samples, ranges, bins):
@@ -233,7 +236,6 @@ class mean_shift():
             #calcualte initial similarity 
             target_hist, new_ranges = self.adaptive_range(self.data,self.target)
             init_similarity = hist_similarity(target_hist,self.data.hist)
-            # print(init_similarity)
             
             center = self.data.center
             next_center = self.next_center()
@@ -243,6 +245,7 @@ class mean_shift():
                 #calculate new similarity
                 self.data.set_center(next_center)
                 self.data.update_hist()
+
                 target_hist, new_ranges = self.adaptive_range(self.data,self.target)
                 new_similarity = hist_similarity(target_hist,self.data.hist)
                 count += 1
@@ -251,14 +254,10 @@ class mean_shift():
                 else:
                     next_center = (center + next_center)/2
 
-            # t1 = datetime.now()
-            # self.data.set_center((next_center+self.data.center)/2)
-            # self.data.update_hist()
-
             i+=1
             if i == self.ite or np.sqrt(np.sum((center-next_center)**2))<self.dis:
                 break
-        print("Mean_shift_next_center",self.data.center)
+        # print("Mean_shift_next_center",self.data.center)
         return self.data
 
 def hist_similarity(h1,h2):
@@ -330,7 +329,7 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
 
         # print("original distance:",dis1)
         # print("after meanshift:",dis2)
-    print(center_list)
+    # print(center_list)
     return center_list
 
 def get_benchmark(path, start,end,index):
@@ -343,7 +342,7 @@ def get_benchmark(path, start,end,index):
         index = DescID[order]
         this_center = (x[order],y[order],z[order])
         center_list.append(this_center)
-    print(center_list)
+    # print(center_list)
     return center_list
 
 def mean_error(track_list,truth_list):

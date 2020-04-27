@@ -240,15 +240,17 @@ if __name__ == "__main__":
     data_dir = data_env + "\\ds14_scivis_0128\\raw"
     # except KeyError:
     #     data_dir = "../data/0.44"
-    generator = Generator(data_dir)
-    generator.generate_new(data_env+"\cosmology_ball_more")
+    # generator = Generator(data_dir)
+    # generator.generate_new(data_env+"\cosmology_ball_more")
     # t1 = datetime.now()
-    # data = np.load(data_env+"/datanew.npy",allow_pickle=True)
-    # print(data[0][3])
+    data = np.load(data_env+"/new.npy",allow_pickle=True)
+    print(data[0][3])
     # for d in data:
     #     # d[:,:3] /= 62.5
     #     mean_position = np.mean(d[:,:3],axis=0)
     #     d[:,:3] -= mean_position
+    #     d= normalize(d,3,10)
+    #     # print(d)
     # np.save(data_env+"/new",data)
     
 
