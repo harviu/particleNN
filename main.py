@@ -75,7 +75,7 @@ def random_check():
     for i,c in enumerate(center):
         if Rvir[i]>300 and Rvir[i]<400:
             print(i)
-            track_list = track_run(os.environ["data"]+"\\ds14_scivis_0128\\raw",91,99,1,c,0.4,2,model,device,args.dim,False)
+            track_list = track_run(os.environ["data"]+"\\ds14_scivis_0128\\raw",91,99,1,c,0.4,2,model,device,args.dim,True)
             truth_list = get_benchmark(os.environ["data"]+"\\ds14_scivis_0128",91,99,ID[i])
             mme = mean_error(track_list,truth_list)
             print(mme)
@@ -83,7 +83,7 @@ def random_check():
         if len(me)==3:
             break
     me = np.array(me)
-    np.save("wo_3",me)
+    np.save("result_saved/w_3",me)
 
 if __name__ == "__main__":
     # input parsing

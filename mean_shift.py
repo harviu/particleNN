@@ -15,6 +15,7 @@ eps = 1e-10
 
 class data_frame():
     def __init__(self,data,n_channel,center,h,bins=None,ranges=None):
+        t0 =  datetime.now()
         data = normalize(data,3,10)
         self.data = data
         self.coord = data[:,:n_channel]
@@ -24,6 +25,8 @@ class data_frame():
         self.h = h
         self.update_hist_time = timedelta(0)
         self.coord_dim = n_channel
+        t1 =  datetime.now()
+        # print("Init Time:", t1-t0)
         self.set_center(center)
         self.set_range(ranges)
         self.update_hist()
@@ -36,11 +39,14 @@ class data_frame():
             self.ranges = np.stack((rmin,rmax),axis=-1)
 
     def set_center(self,center):
+        t0 = datetime.now()
         self.center = center
         self.near = self.kd.query_ball_point(self.center,self.h)
         self.near_coord = self.coord[self.near]
         self.near_attr = self.attr[self.near]
         self.near_pc = self.data[self.near]
+        t1 = datetime.now()
+        self.update_hist_time+= t1-t0
 
     def update_hist(self):
         t0 = datetime.now()
@@ -72,7 +78,7 @@ class latent_df(data_frame):
         self.h = h
         self.coord_dim = n_channel
         t1 =  datetime.now()
-        print("Init Time:", t1-t0)
+        # print("Init Time:", t1-t0)
 
         self.set_center(center)
         self.set_range(ranges)
@@ -322,7 +328,6 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
             start_df = data_frame(data,3,center,h,bins,None)
             target = data_frame(data_next,3,center,h,bins,None)
         
-        t2 = datetime.now()
         # print("construction time: ", t2-t0)
         # print(start_df.update_hist_time + target.update_hist_time)
         # print(target.calculate_latent_time+start_df.calculate_latent_time)
@@ -337,14 +342,15 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
         # scatter_3d(pc2)
 
         ms = mean_shift(m,target,ite=10,dis=0.05)
-        # start_df.update_hist_time = timedelta(0)
-        # target.update_hist_time = timedelta(0)
-        # start_df.calculate_latent_time = timedelta(0)
-        # target.calculate_latent_time = timedelta(0)
+        t2 = datetime.now()
+        start_df.update_hist_time = timedelta(0)
+        target.update_hist_time = timedelta(0)
+        start_df.calculate_latent_time = timedelta(0)
+        target.calculate_latent_time = timedelta(0)
         ms.shift()
         t1 = datetime.now()
         print("total time: ", t1-t0)
-        print("hist time: ",start_df.update_hist_time + target.update_hist_time)
+        # print("hist time: ",start_df.update_hist_time + target.update_hist_time)
         # print("latent time: ",target.calculate_latent_time+start_df.calculate_latent_time)
         # print(ms.next_center_time)
 
