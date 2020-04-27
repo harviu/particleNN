@@ -21,8 +21,28 @@ from vtk.util import numpy_support
 # plt.show()
 
 center = np.load("result_saved/truth_list.npy")
-for k in center:
-    print(k[0])
+print(center.shape)
+center = center.reshape(-1,3)
+coords = numpy_support.numpy_to_vtk(center)
+points = vtkPoints()
+points.SetData(coords)
+print(coords)
 
 vtk_data = vtkUnstructuredGrid()
-vtk_data.SetPoint
+vtk_data.SetPoints(points)
+print(vtk_data)
+
+    
+def data_to_numpy(vtk_data):
+    coord = numpy_support.vtk_to_numpy(vtk_data.GetPoints().GetData())
+    concen = numpy_support.vtk_to_numpy(vtk_data.GetPointData().GetArray(0))[:,None]
+    velocity = numpy_support.vtk_to_numpy(vtk_data.GetPointData().GetArray(1))
+    point_data = np.concatenate((coord,concen,velocity),axis=-1)
+    return point_data
+
+# reader = vtkXMLUnstructuredGridReader()
+# reader.SetFileName(r"D:\OneDrive - The Ohio State University\data\2016_scivis_fpm\0.44\run03\002.vtu")
+# reader.Update()
+
+# data = reader.GetOutput()
+# print(data.GetPoints().GetData())
