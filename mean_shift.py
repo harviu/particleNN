@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime,timedelta
 import numpy as np
 from matplotlib import pyplot as plt
 import pickle
@@ -22,6 +22,7 @@ class data_frame():
         self.kd = KDTree(self.coord,1000)
         self.bins = bins
         self.h = h
+        self.update_hist_time = timedelta(0)
         self.coord_dim = n_channel
         self.set_center(center)
         self.set_range(ranges)
@@ -42,17 +43,23 @@ class data_frame():
         self.near_pc = self.data[self.near]
 
     def update_hist(self):
+        t0 = datetime.now()
         self.hist = weighted_hist(self.near_coord,self.near_attr, self.center,self.h,self.bins,self.ranges)
+        t1 = datetime.now()
+        self.update_hist_time+= t1-t0
 
 
     
 class latent_df(data_frame):
     def __init__(self,data,n_channel,center,h,bins,ranges,model,device,dim,pca=None):
+        t0 =  datetime.now()
         self.model = model
         self.device = device
         self.dim = dim
         self.pca = pca
         self.latent_length = 6
+        self.calculate_latent_time = timedelta(0)
+        self.update_hist_time = timedelta(0)
 
         data = normalize(data,3,10)
         latent = np.zeros((len(data),self.latent_length))
@@ -64,6 +71,8 @@ class latent_df(data_frame):
         self.bins = bins
         self.h = h
         self.coord_dim = n_channel
+        t1 =  datetime.now()
+        print("Init Time:", t1-t0)
 
         self.set_center(center)
         self.set_range(ranges)
@@ -77,6 +86,7 @@ class latent_df(data_frame):
         """
         calculte the latent vectors of points around center
         """
+        t0 = datetime.now()
         not_cal = []
         for n in self.near:
             if not self.latent_mask[n]:
@@ -105,6 +115,8 @@ class latent_df(data_frame):
             self.near_coord = self.coord[self.near]
             self.near_attr = self.attr[self.near]
             self.near_pc = self.data[self.near]
+        t1 = datetime.now()
+        self.calculate_latent_time += t1-t0
 
 
 
@@ -160,6 +172,7 @@ class mean_shift():
         self.data = data
         self.ite = ite
         self.dis = dis
+        self.next_center_time = timedelta(0)
 
     def adaptive_range(self,data,target):
         coord_dim = self.data.coord_dim
@@ -190,6 +203,7 @@ class mean_shift():
         
         target_hist, new_ranges = self.adaptive_range(data,target)
 
+        t0 = datetime.now()
         weights = np.sqrt(target_hist/(data.hist+eps))
 
         near_bins = self._get_bins(data.near_attr,new_ranges,data.bins)
@@ -206,7 +220,8 @@ class mean_shift():
         # print(near_w)
 
         new_center /= w_sum
-        
+        t1 = datetime.now()
+        self.next_center_time+=t1-t0
         return new_center
 
     def _get_bins(self,samples, ranges, bins):
@@ -249,7 +264,7 @@ class mean_shift():
                 target_hist, new_ranges = self.adaptive_range(self.data,self.target)
                 new_similarity = hist_similarity(target_hist,self.data.hist)
                 count += 1
-                if (new_similarity > init_similarity or count == 13):
+                if (new_similarity > init_similarity or count == 5):
                     break
                 else:
                     next_center = (center + next_center)/2
@@ -299,6 +314,7 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
         data_next = data_to_numpy(data_reader(path+"\ds14_scivis_0128_e4_dt04_0.{:02d}00".format(i+step)))
         data_next = data_next[:,:dim]
 
+        t0 =  datetime.now()
         if latent:
             start_df = latent_df(data,3,center,h,bins,None,model,device,dim)
             target = latent_df(data_next,3,center,h,bins,None,model,device,dim)
@@ -306,23 +322,38 @@ def track_run(path,start,end,step,init_center,h,bins,model,device,dim,latent=Tru
             start_df = data_frame(data,3,center,h,bins,None)
             target = data_frame(data_next,3,center,h,bins,None)
         
+        t2 = datetime.now()
+        # print("construction time: ", t2-t0)
+        # print(start_df.update_hist_time + target.update_hist_time)
+        # print(target.calculate_latent_time+start_df.calculate_latent_time)
+
         m = start_df.near_pc.copy()
-        pc1 = m.copy()
-        pc1 = mean_sub(pc1)
+        # pc1 = m.copy()
+        # pc1 = mean_sub(pc1)
         # scatter_3d(pc1)
 
-        pc2 = target.near_pc.copy()
-        pc2 = mean_sub(pc2)
+        # pc2 = target.near_pc.copy()
+        # pc2 = mean_sub(pc2)
         # scatter_3d(pc2)
 
-        ms = mean_shift(m,target,ite=20,dis=0.01)
+        ms = mean_shift(m,target,ite=10,dis=0.05)
+        # start_df.update_hist_time = timedelta(0)
+        # target.update_hist_time = timedelta(0)
+        # start_df.calculate_latent_time = timedelta(0)
+        # target.calculate_latent_time = timedelta(0)
         ms.shift()
-        pc3 = target.near_pc.copy()
-        pc3 = mean_sub(pc3)
+        t1 = datetime.now()
+        print("total time: ", t1-t0)
+        print("hist time: ",start_df.update_hist_time + target.update_hist_time)
+        # print("latent time: ",target.calculate_latent_time+start_df.calculate_latent_time)
+        # print(ms.next_center_time)
+
+        # pc3 = target.near_pc.copy()
+        # pc3 = mean_sub(pc3)
         # scatter_3d(pc3)
 
-        dis1 = nn_distance(pc1,pc2)
-        dis2 = nn_distance(pc1,pc3)
+        # dis1 = nn_distance(pc1,pc2)
+        # dis2 = nn_distance(pc1,pc3)
         # if dis2< dis1:
         center = target.center
         center_list.append(tuple(center))
@@ -351,7 +382,7 @@ def mean_error(track_list,truth_list):
     distance = distance **2
     distance = np.sum(distance,axis=1)
     distance = np.sqrt(distance)
-    return np.mean(distance)
+    return distance
 
     
 

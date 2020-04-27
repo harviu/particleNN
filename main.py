@@ -68,22 +68,22 @@ def random_check():
     from thingking import loadtxt
     path = os.environ["data"]+"\\ds14_scivis_0128"
     ID, DescID, Mvir, Vmax, Vrms, Rvir, Rs, Np, x, y, z, VX, VY, VZ, JX, JY, JZ, Spin, rs_klypin, Mvir_all, M200b, M200c, M500c, M2500c, Xoff, Voff, spin_bullock, b_to_a, c_to_a, A_x_, A_y_, A_z_, b_to_a_500c_, c_to_a_500c_, A_x__500c_, A_y__500c_, A_z__500c_, TU, M_pe_Behroozi, M_pe_Diemer = \
-        loadtxt(path+"/rockstar/out_{:02d}.list".format(90-2), unpack=True)
+        loadtxt(path+"/rockstar/out_{:02d}.list".format(91-2), unpack=True)
 
     center = np.array((x,y,z)).T
     me = []
     for i,c in enumerate(center):
-        if Rvir[i]>400 and Rvir[i]<500:
+        if Rvir[i]>300 and Rvir[i]<400:
             print(i)
-            track_list = track_run(os.environ["data"]+"\\ds14_scivis_0128\\raw",90,95,1,c,0.5,2,model,device,args.dim,True)
-            truth_list = get_benchmark(os.environ["data"]+"\\ds14_scivis_0128",90,95,ID[i])
+            track_list = track_run(os.environ["data"]+"\\ds14_scivis_0128\\raw",91,99,1,c,0.4,2,model,device,args.dim,False)
+            truth_list = get_benchmark(os.environ["data"]+"\\ds14_scivis_0128",91,99,ID[i])
             mme = mean_error(track_list,truth_list)
             print(mme)
             me.append(mme)
-        if len(me)==10:
+        if len(me)==3:
             break
-    print(me)
-    print(sum(me)/len(me))
+    me = np.array(me)
+    np.save("wo_3",me)
 
 if __name__ == "__main__":
     # input parsing
@@ -141,12 +141,12 @@ if __name__ == "__main__":
         loader = Loader(data_file,args.batch_size)
         model.eval()
         with torch.no_grad():
-            for i, data in enumerate(loader.load_data(50000)):
+            for i, data in enumerate(loader.load_data(0,50000)):
                 data = to_tensor_list(data,device,args.dim)
                 recon_batch = model(data)
                 pc1 = data[11].cpu()
                 pc2 = recon_batch[11].cpu()
-                pca = PCA(n_components=2)
+                # pca = PCA(n_components=2)
                 # pca.fit(np.concatenate((pc1,pc2),axis=0))
                 # pc1_embedded = pca.transform(pc1)
                 # pc2_embedded = pca.transform(pc2)
@@ -154,8 +154,8 @@ if __name__ == "__main__":
                 # plt.show()
                 # plt.scatter(pc2_embedded[:,0],pc2_embedded[:,1])
                 # plt.show()
-                scatter_3d(pc1)
-                scatter_3d(pc2)
+                scatter_3d(pc1[:,:4])
+                scatter_3d(pc2[:,:4])
     elif args.phase == 0:
         loader = Loader(data_file,args.batch_size)
         for epoch in range(1, args.epochs + 1):
