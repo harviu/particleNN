@@ -98,12 +98,12 @@ def track_more():
         # if Rvir[i]>300 and Rvir[i]<400:
         print(i)
         r = max(1,Rvir[i]/1000)
-        if i == 12:
+        if i in [1,10,12]:
             continue
         try:
-            # truth_list = get_benchmark(os.environ["data"]+"\\ds14_scivis_0128",12,99,ID[i])
-            track_list = track_run(os.environ["data"]+"\\ds14_scivis_0128\\raw",12,99,1,c,r,2,model,device,args.dim,False)
-            me.append(track_list)
+            truth_list = get_benchmark(os.environ["data"]+"\\ds14_scivis_0128",12,99,ID[i])
+            # track_list = track_run(os.environ["data"]+"\\ds14_scivis_0128\\raw",12,99,1,c,r,2,model,device,args.dim,False)
+            me.append(truth_list)
             id_list.append(i)
             if len(me)==30:
                 break
@@ -112,7 +112,7 @@ def track_more():
         # mme = mean_error(track_list,truth_list)
     me = np.array(me)
     print(id_list)
-    np.save("result_saved/track_list",me)
+    np.save("result_saved/truth_list",me)
 
 if __name__ == "__main__":
     # input parsing

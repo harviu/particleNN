@@ -21,17 +21,30 @@ from vtk.util import numpy_support
 # plt.show()
 
 center = np.load("result_saved/truth_list.npy")
-print(center.shape)
+# print(center.shape)
 center = center.reshape(-1,3)
 coords = numpy_support.numpy_to_vtk(center)
 points = vtkPoints()
 points.SetData(coords)
-print(coords)
+# print(coords)
 
 vtk_data = vtkUnstructuredGrid()
 vtk_data.SetPoints(points)
-print(vtk_data)
 
+time = np.arange(0.12,1,0.01)
+time = np.tile(time,30)
+time = numpy_support.numpy_to_vtk(time)
+# print(len(time))
+vtk_data.GetPointData().AddArray(time)
+vtk_data.GetPointData().GetArray(0).SetName("time")
+print(vtk_data.GetPointData())
+print(vtk_data.GetPoints())
+
+
+writer = vtkXMLUnstructuredGridWriter()
+writer.SetFileName("truth.vtu")
+writer.SetInputData(vtk_data)
+writer.Write()
     
 def data_to_numpy(vtk_data):
     coord = numpy_support.vtk_to_numpy(vtk_data.GetPoints().GetData())
