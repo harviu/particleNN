@@ -41,6 +41,7 @@ total time:  0:00:01.667384
 total time:  0:00:01.764399
 0.09969511125064684
 all tested mean:  0.10846997694574065
+
 PS C:\Users\aide0\projects\pointnet_vae> python main.py -p 2 -w .\result_saved\cos_knn.pth -v 6 -d 10
 Model loaded from .\result_saved\cos_knn.pth
 halo id:  25
