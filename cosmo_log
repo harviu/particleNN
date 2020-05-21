@@ -1,0 +1,116 @@
+10 halos Tracking, first without latent then with:
+
+Model loaded from .\result_saved\cos_knn.pth
+halo id:  25
+total time:  0:00:01.685899
+total time:  0:00:01.892435
+0.07615776583548034
+halo id:  26
+total time:  0:00:01.651377
+total time:  0:00:01.678379
+0.07230944458944621
+halo id:  40
+total time:  0:00:01.689382
+total time:  0:00:01.826299
+0.16101167406091316
+halo id:  43
+total time:  0:00:01.599870
+total time:  0:00:01.803430
+0.1526556345883126
+halo id:  56
+total time:  0:00:01.802410
+total time:  0:00:01.763409
+0.1258791418364154
+halo id:  63
+total time:  0:00:01.654957
+total time:  0:00:01.936439
+0.15722066471910415
+halo id:  72
+total time:  0:00:01.649523
+total time:  0:00:01.697384
+0.0850909401140804
+total time:  0:00:01.681380
+total time:  0:00:01.633816
+0.09669699378017582
+halo id:  107
+total time:  0:00:01.744394
+total time:  0:00:01.754397
+0.057982398682831705
+halo id:  112
+total time:  0:00:01.667384
+total time:  0:00:01.764399
+0.09969511125064684
+all tested mean:  0.10846997694574065
+PS C:\Users\aide0\projects\pointnet_vae> python main.py -p 2 -w .\result_saved\cos_knn.pth -v 6 -d 10
+Model loaded from .\result_saved\cos_knn.pth
+halo id:  25
+total time:  0:00:33.448296
+total time:  0:00:34.506699
+0.08778497969330362
+halo id:  26
+total time:  0:00:24.796258
+total time:  0:00:24.654536
+0.05497893326782345
+halo id:  40
+total time:  0:00:15.604861
+total time:  0:00:22.268511
+0.08471642298309934
+halo id:  43
+total time:  0:00:15.717724
+total time:  0:00:15.896774
+0.05030077031223189
+halo id:  56
+total time:  0:00:23.327727
+total time:  0:00:23.547131
+0.1234327696245778
+halo id:  63
+total time:  0:00:19.327293
+total time:  0:00:20.962747
+0.1810587802935517
+halo id:  72
+total time:  0:00:26.647200
+total time:  0:00:22.524680
+0.0848007910212065
+halo id:  85
+total time:  0:00:24.663616
+total time:  0:00:24.665124
+0.08575779247403154
+halo id:  107
+total time:  0:00:20.812724
+total time:  0:00:11.092262
+0.02539161924591452
+halo id:  112
+total time:  0:00:18.742569
+total time:  0:00:15.367297
+0.09076816635738574
+all tested mean:  0.0868991025273126
+
+Failed case halo 63:
+
+without:
+halo id:  63
+total time:  0:00:01.577357
+total time:  0:00:01.577356
+total time:  0:00:01.573255
+total time:  0:00:01.630823
+total time:  0:00:01.622369
+total time:  0:00:01.581378
+total time:  0:00:01.656375
+total time:  0:00:01.590364
+[0.09525529 0.22123613 0.36760248 0.50343084 0.51136688 0.58799113
+ 0.61989461 0.65146662]
+all tested mean:  0.444780496371911
+
+with:
+halo id:  63
+total time:  0:00:19.800094
+total time:  0:00:21.086473
+total time:  0:00:22.698923
+total time:  0:00:23.105771
+total time:  0:00:30.322557
+total time:  0:00:21.543131
+total time:  0:00:29.311510
+total time:  0:00:29.089073
+[0.11913753 0.24298004 0.38689715 0.52183071 0.51661359 0.58831234
+ 0.60904557 0.646899  ]
+all tested mean:  0.45396449009274475
