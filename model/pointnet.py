@@ -4,12 +4,12 @@ from torch.nn import functional as F
 import numpy as np
 import random
 
-class AE(nn.Module):
+class PointNet(nn.Module):
     def __init__(self,args):
         """
         input size: B * N * C
         """
-        super(AE, self).__init__()
+        super(PointNet, self).__init__()
         self.vector_length = args.vector_length
         self.num_channel = args.dim
         self.prediction_num = args.k

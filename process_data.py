@@ -12,9 +12,48 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.ckdtree import cKDTree,cKDTreeNode
 from multiprocessing import Pool
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,DataLoader
 from yt.utilities.sdf import SDFRead
 from thingking import loadtxt
+
+class PointDataFPM(Dataset):
+    def __init__(self,data,args):
+        self.r = args.r
+        self.p = args.p
+        # normalize data to [0, 1]
+        data_max = np.array([ 5, 5, 10.00022221, 357.19000244, 38.62746811, 48.47133255, 50.60621262])
+        data_min = np.array([-5, -5, 0, 0, -5.63886223e+01, -3.69567909e+01, -7.22953186e+01])
+        data = (data - data_min) / (data_max-data_min)
+        data = np.clip(data,0,1)
+        patch_list = []
+        p_each_dim = round(math.pow(args.p,1.0/3))
+        ran = 1.0/p_each_dim
+        num = 0
+        for x  in range(p_each_dim):
+            min_x = max(x*ran-self.r,0)
+            max_x = min((x+1)*ran+self.r,1)
+            filter_x = np.logical_and(data[:,0] > min_x, data[:,0] < max_x)
+            for y in range(p_each_dim):
+                min_y = max(y*ran-self.r,0)
+                max_y = min((y+1)*ran+self.r,1)
+                filter_y = np.logical_and(data[:,1] > min_y, data[:,1] < max_y)
+                fil_xy = np.logical_and(filter_x,filter_y)
+                for z in range(p_each_dim):
+                    min_z = max(z*ran-self.r,0)
+                    max_z = min((z+1)*ran+self.r,1)
+                    filter_z = np.logical_and(data[:,2] > min_z, data[:,2] < max_z)
+                    fil = np.logical_and(fil_xy,filter_z)
+                    patch_list.append(data[fil])
+                    num += len(patch_list[-1])
+        self.patch_list = patch_list
+    
+    def __getitem__(self, index):
+        return self.patch_list[index]
+    
+    def __len__(self):
+        return len(self.patch_list)
+                    
+
 
 class PointData(Dataset):
     def __init__(self,data,args,sampler=None,halo_info=None):
@@ -298,4 +337,11 @@ def plot_loss(filename):
                     count = 1
     print(loss_list)
 
-# plot_loss("states_saved/cos_k32_v256/cos_k32_v256.o1981764")
+# data = np.load("recon_points.npy")
+# print(data.shape)
+# array_dict = {
+#     "concentration":data[:,3],
+#     "velocigy":data[:,4:]
+# }
+# data_save = numpy_to_vtk(data[:,:3],array_dict)
+# vtk_write(data_save,"recon_vtk.vtu")
