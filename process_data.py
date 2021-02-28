@@ -129,7 +129,6 @@ class PointData(Dataset):
         self.sample_id = sample_id
 
         if mode == "ball":
-            print(self.r)
             self.nn = kd.query_ball_point(data[sample_id,:3],self.r,n_jobs=-1)
         elif mode == "knn":
             _, self.nn = kd.query(data[sample_id,:3],k,n_jobs=-1)
