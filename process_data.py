@@ -65,12 +65,17 @@ class PointData(Dataset):
         self.have_label = args.have_label and halo_info is not None
         source = args.source
         if source == "fpm":
-            mean = [0, 0, 5, 23.9, 0, 0, 0.034]
-            std = [2.68, 2.68, 3.09, 55.08, 0.3246, 0.3233, 0.6973]
+            data_max = np.array([ 5, 5, 10.00022221, 357.19000244, 38.62746811, 48.47133255, 50.60621262])
+            data_min = np.array([-5, -5, 0, 0, -5.63886223e+01, -3.69567909e+01, -7.22953186e+01])
+            # mean = [0, 0, 5, 23.9, 0, 0, 0.034]
+            # std = [2.68, 2.68, 3.09, 55.08, 0.3246, 0.3233, 0.6973]
         elif source == "cos":
-            mean = [30.4, 32.8, 32.58, 0, 0, 0, 0, 0, 0, -732720]
-            std = [18.767, 16.76, 17.62, 197.9, 247.2, 193.54, 420.92, 429, 422.3, 888474]
-        data = normalize(data,mean,std)
+            data_max=  [0,0,0, -2466, -2761, -2589, -17135.6, -20040, -20096, -6928022]
+            data_min=  [6.2500008e+01, 6.2500000e+01, 6.2500000e+01, 2.7808181e+03, 2.9791230e+03, 2.6991892e+03, 1.9324572e+04, 2.0033873e+04, 1.7973633e+04, 6.3844562e+05]
+            # mean = [30.4, 32.8, 32.58, 0, 0, 0, 0, 0, 0, -732720]
+            # std = [18.767, 16.76, 17.62, 197.9, 247.2, 193.54, 420.92, 429, 422.3, 888474]
+        data = (data - data_min) / (data_max-data_min)
+        data = np.clip(data,0,1)
         coord = data[:,:3]
         kd = cKDTree(coord,leafsize=100)
 
@@ -121,8 +126,10 @@ class PointData(Dataset):
                 label = np.zeros((len(data)),dtype=np.int64)
                 label[positive] = 1
                 self.label = label[sample_id]
+        self.sample_id = sample_id
 
         if mode == "ball":
+            print(self.r)
             self.nn = kd.query_ball_point(data[sample_id,:3],self.r,n_jobs=-1)
         elif mode == "knn":
             _, self.nn = kd.query(data[sample_id,:3],k,n_jobs=-1)
@@ -130,6 +137,8 @@ class PointData(Dataset):
 
     def __getitem__(self, index):
         nn_id = self.nn[index]
+        center_id = self.sample_id[index]
+        center = self.data[center_id]
         if self.mode == "ball":
             #cutting
             if len(nn_id) >= self.k:
@@ -137,7 +146,6 @@ class PointData(Dataset):
                 pc_length = self.k
             #point cloud and center point
             pc = self.data[nn_id]
-            center = self.data[nn_id[0]]
             pc[:,:3] -= center[:3]
             #padding
             if len(nn_id) < self.k:
@@ -151,7 +159,6 @@ class PointData(Dataset):
                 return pc, pc_length
         elif self.mode =="knn":
             pc = self.data[nn_id]
-            center = self.data[nn_id[0]]
             pc[:,:3] -= center[:3]
             if self.have_label:
                 return pc, self.label[index]
