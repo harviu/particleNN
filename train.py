@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 from model.pointnet import PointNet as AE
@@ -34,10 +35,8 @@ def inference(pd,model,batch_size,args):
                     mask = d[1].cuda()
             else:
                 data = d[:,:,:args.dim].float().cuda()
-            if args.mode=="knn":
-                latent = model.encode(data) 
-            elif args.mode=="ball":
-                latent = model.encode(data,mask) 
+
+            latent = model.encode(data) 
             if args.have_label:
                 latent = model.cls[:6](latent)
                 predict = model.cls[6:](latent)
@@ -86,7 +85,7 @@ def parse_arguments():
     parser.add_argument('--lr', dest='lr', type=float, default=0.001, help='learning-rate')
     parser.add_argument('-s', dest='source', type=str, default="fpm", help='data source')
     parser.add_argument('-k', dest='k', type=int, default=256, help='k in knn')
-    parser.add_argument('-r', dest='r', type=float, default=0.2, help='r in ball query')
+    parser.add_argument('-r', dest='r', type=float, default=0.05, help='r in ball query')
     parser.add_argument("--result-dir", dest="result_dir", type=str, default="states", help='the directory to save the result')
     args = parser.parse_args()
     return args
@@ -106,15 +105,28 @@ def train(epoch,args,loader):
             else:
                 data = d[:,:,:args.dim].float().to(device)
             optimizer.zero_grad()
-            if args.mode=="knn":
-                recon_batch = model(data) 
-            elif args.mode=="ball":
-                recon_batch = model(data,mask) 
+            recon_batch = model(data) 
+
+            # torch.set_printoptions(precision=4,sci_mode =False)
+            # for i in range(len(data)):
+            #     pc = data[i,:mask[i]].cpu().detach()
+            #     pc2 = recon_batch[i,:mask[i]].cpu().detach()
+            #     fig = plt.figure()
+            #     ax = fig.add_subplot(121, projection='3d')
+            #     ax.title.set_text("original")
+            #     ax2 = fig.add_subplot(122, projection='3d')
+            #     ax2.title.set_text("recon")
+            #     vmax = max(np.max(pc[:,3].numpy()),np.max(pc2[:,0].numpy()))
+            #     ax.scatter(pc[:,0],pc[:,1],pc[:,2],c=pc[:,3],vmin=0,vmax=vmax)
+            #     ax2.scatter(pc[:,0],pc[:,1],pc[:,2],c=pc2[:,0],vmin=0,vmax=vmax)
+            #     plt.show()
+            # exit()
+
             if args.have_label:
                 loss_fn = nn.CrossEntropyLoss(reduction="mean")
                 loss = loss_fn(recon_batch,label)
             else:
-                loss = model.loss(recon_batch, data)
+                loss = model.MSE_loss(recon_batch, data,mask)
             loss.backward()
             train_loss += loss.item()
             optimizer.step()
@@ -151,7 +163,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if args.cuda else "cpu")
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
-    model = AE(args).float().to(device)
+    model = AE(args,256).float().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     if args.load:
@@ -166,7 +178,7 @@ if __name__ == "__main__":
 
     # prepare data
     if args.source == "fpm":
-        file_list = collect_file(data_path+"/2016_scivis_fpm/0.44/run03/",args.source,shuffle=True)
+        file_list = collect_file(data_path+"/fpm/lr_03/",args.source,shuffle=True)
     elif args.source == "cos":
         file_list = collect_file(data_path+"/ds14_scivis_0128/raw",args.source,shuffle=True)
     for epoch in range(1, args.epochs + 1):

@@ -17,6 +17,7 @@ from yt.utilities.sdf import SDFRead
 from thingking import loadtxt
 
 class PointDataFPM(Dataset):
+    # dataset in blocks
     def __init__(self,data,args):
         self.r = args.r
         self.p = args.p
@@ -56,6 +57,7 @@ class PointDataFPM(Dataset):
 
 
 class PointData(Dataset):
+    #dataset for individual point
     def __init__(self,data,args,sampler=None,halo_info=None):
         mode = args.mode
         k = args.k
@@ -120,24 +122,31 @@ class PointData(Dataset):
                     indices = l.indices
                     idx.append(indices[int(len(indices)*rand[i])])
                 sample_id = idx
+            self.center = data[sample_id,:3]
         else:
-            sample_id = sampler
-            if self.have_label:
-                label = np.zeros((len(data)),dtype=np.int64)
-                label[positive] = 1
-                self.label = label[sample_id]
-        self.sample_id = sample_id
-
+            sampler = np.array(sampler)
+            if len(sampler.shape) == 1:
+                sample_id = sampler
+                self.center = data[sample_id,:3]
+                if self.have_label:
+                    label = np.zeros((len(data)),dtype=np.int64)
+                    label[positive] = 1
+                    self.label = label[sample_id]
+            else:
+                sampler = sampler/10
+                sampler[:,0] += 0.5
+                sampler[:,1] += 0.5
+                self.center = sampler
+                
         if mode == "ball":
-            self.nn = kd.query_ball_point(data[sample_id,:3],self.r,n_jobs=-1)
+            self.nn = kd.query_ball_point(self.center,self.r,n_jobs=-1)
         elif mode == "knn":
-            _, self.nn = kd.query(data[sample_id,:3],k,n_jobs=-1)
+            _, self.nn = kd.query(self.center,k,n_jobs=-1)
         self.data = data
 
     def __getitem__(self, index):
         nn_id = self.nn[index]
-        center_id = self.sample_id[index]
-        center = self.data[center_id]
+        center = self.center[index]
         if self.mode == "ball":
             #cutting
             if len(nn_id) >= self.k:
@@ -321,6 +330,29 @@ def vtk_write(data_save,filename:str):
     writer = vtk.vtkXMLDataSetWriter()
     writer.SetFileName(filename)
     writer.SetInputData(data_save)
+    writer.Write()
+
+def vtk_write_image(x_dim,y_dim,z_dim,data,filename):
+    # data flattened in xyz order
+    assert len(data) == x_dim * y_dim * z_dim
+    imageData = vtk.vtkImageData()
+    imageData.SetDimensions(x_dim,y_dim,z_dim)
+    imageData.AllocateScalars(vtk.VTK_DOUBLE, 1)
+
+    dims = imageData.GetDimensions()
+
+    # Fill every entry of the image data with "2.0"
+    i = 0
+    for z in range(dims[2]):
+        for y in range(dims[1]):
+            for x in range(dims[0]):
+                imageData.SetScalarComponentFromDouble(z, y, x, 0, data[i])
+                i+=1
+
+
+    writer = vtk.vtkXMLImageDataWriter()
+    writer.SetFileName(filename)
+    writer.SetInputData(imageData)
     writer.Write()
 
 def plot_loss(filename):

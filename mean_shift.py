@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from scipy.spatial import KDTree
 from scipy.spatial.ckdtree import cKDTree
 from sklearn.decomposition import PCA
-from model import AE
+from model.pointnet import PointNet as AE
 from sklearn.cluster import KMeans
 
 from process_data import *

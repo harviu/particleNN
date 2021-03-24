@@ -11,7 +11,7 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
-from model import AE
+from model.pointnet import PointNet as AE
 from process_data import *
 from train import inference
 
@@ -55,22 +55,94 @@ def hierk(node:Node,level=0):
         node.right = hierk(n2,level+1)
         return node
 
+def vis_latent(latent,model,filename,r=0.05,dim=50):
+    # show the latent block
+    x = np.linspace(-0.05, 0.05, dim)
+    y = np.linspace(-0.05, 0.05, dim)
+    z = np.linspace(-0.05, 0.05, dim)
+    xyz = np.meshgrid(x,y,z)
+    xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
+    xyz = xyz[None,:,:]
+    # xyz = np.random.rand(400,3)
+    # xyz = (xyz-0.5) * (args.r/0.5)
+    # condition = np.sum((xyz * xyz),axis=-1) < args.r * args.r
+    # xyz = xyz[condition][None,:,:]
+    xyz = torch.from_numpy(xyz).cuda().float()
+
+    with torch.no_grad():
+        model.eval()
+        if not torch.is_tensor(latent):
+            latent = torch.from_numpy(latent[None,:]).cuda().float()
+        signal = model.decode(latent,xyz)
+        pc = torch.cat([xyz,signal],dim=-1)
+        pc = pc.cpu().numpy()[0]
+    vtk_write_image(dim,dim,dim,signal.cpu().numpy()[0],filename)
+
+def tsne_project(embedding, tsne_projected):
+    fig, ax = plt.subplots()
+    for e in range(np.max(embedding)+1):
+        ax.scatter(tsne_projected[embedding==e][:,0],tsne_projected[embedding==e][:,1],label=e)
+    ax.legend()
+    plt.show()
+
+def reconstruction(pd,model):
+    loader = DataLoader(pd, batch_size=32, shuffle=False, drop_last=False)
+    r = pd.r
+    model.eval()
+    with torch.no_grad():
+        for i, d in enumerate(loader):
+            data = d[0][:,:,:args.dim].float().cuda()
+            mask = d[1].cuda()
+
+            latent = model.encode(data) 
+            xyz = data[:,:,:3]
+
+            recon = model.decode(latent,xyz)
+            
+            torch.set_printoptions(precision=4,sci_mode =False)
+            for i in range(len(data)):
+                pc = data[i,:mask[i]].cpu().detach()
+                pc2 = recon[i,:mask[i]].cpu().detach()
+                xyz = xyz[i,:mask[i]].cpu().detach()
+
+                vis_latent(latent[i][None,:],model,"lr41_25_volume.vti",r)
+                array_dict = {
+                        "concentration": pc[:,3],
+                    }
+                vtk_data = numpy_to_vtk(xyz,array_dict)
+                vtk_write(vtk_data,"lr41_25_gt.vtu")
+                
+                array_dict = {
+                        "concentration": pc2[:,0],
+                    }
+                vtk_data = numpy_to_vtk(xyz,array_dict)
+                vtk_write(vtk_data,"lr41_25_recon.vtu")
+                
+                fig = plt.figure()
+                ax = fig.add_subplot(121, projection='3d')
+                ax.title.set_text("original")
+                ax2 = fig.add_subplot(122, projection='3d')
+                ax2.title.set_text("recon")
+                vmax = max(np.max(pc[:,3].numpy()),np.max(pc2[:,0].numpy()))
+                print(np.max(pc[:,3].numpy()),np.max(pc2[:,0].numpy()))
+                ax.scatter(pc[:,0],pc[:,1],pc[:,2],c=pc[:,3],vmin=0,vmax=vmax)
+                ax2.scatter(pc[:,0],pc[:,1],pc[:,2],c=pc2[:,0],vmin=0,vmax=vmax)
+                plt.show()
+
+
 
 if __name__ == "__main__":
-    try:
-        data_path = os.environ['data']
-    except KeyError:
-        data_path = './data/'
-    mode = "cos"
+    data_path = './data/'
+    mode = "fpm"
     # IoU_list = []
     # loss_list = []
     # for i in range(2,100,1):
     #     print(i)
     i = 49
     if mode == "fpm":
-        data_directory = data_path+"/2016_scivis_fpm/0.44/run41/025.vtu"
+        data_directory = data_path+"/fpm/lr_41/025.vtu"
         # state_dict_directory = "states_saved/fpm_knn128_dim7_vec64_CP35.pth"
-        state_dict_directory = "states_saved/fpm_k128_v64/CP35.pth"
+        state_dict_directory = "states/CP10.pth"
         data = vtk_reader(data_directory)
     else:
         if i == 100:
@@ -91,7 +163,7 @@ if __name__ == "__main__":
     state = state_dict['state']
     args = state_dict['config']
     print(args)
-    model = AE(args).float().cuda()
+    model = AE(args,256).float().cuda()
     model.load_state_dict(state)
     if args.have_label:
         hp = halo_reader(halo_directory)
@@ -101,54 +173,171 @@ if __name__ == "__main__":
         # torch.save(latent,"cos_latent_middle49")
         # torch.save(predict,"predict")
     else:
+        dim = 30
+        # x = np.linspace(1/dim, 1, dim)
+        # y = np.linspace(1/dim, 1, dim)
+        # z = np.linspace(1/dim, 1, dim)
+        # xyz = np.meshgrid(x,y,z)
+        # xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
+        # cond = (xyz[:,0]-0.5)**2+(xyz[:,1]-0.5)**2 < 0.25
+        # xyz = xyz[cond]
+        # pd = PointData(data,args,xyz)
         pd = PointData(data,args,np.arange(len(data)))
-        latent = inference(pd,model,1500,args)
-        # torch.save(latent,"fpm_latent_25")
+        loader = DataLoader(pd, batch_size=1500, shuffle=False, drop_last=False)
+        # # major_axis = np.zeros((len(data),4))
+        # # for i,(d,m) in enumerate(loader):
+        # #     d = d[0,:m,:4]
+        # #     pca = PCA()
+        # #     pca.fit(d)
+        # #     major_axis[i] = pca.components_[0]
+        # #     print(i,end="\r")
+        # # print(major_axis.shape)
+        # # np.save("major_axis",major_axis)
+
+        # # full = np.zeros((len(pd),256*3))
+        # # for i, d in enumerate(loader):
+        # #     if i == len(loader) -1:
+        # #         full[i*32:] = d[0][:,:,:3].reshape(-1,768)
+        # #     else:
+        # #         full[i*32:(i+1)*32] = d[0][:,:,:3].reshape(32,-1)
+        # # print(full.shape)
+        # latent = inference(pd,model,1500,args)
+        # print(latent.shape)
+        # torch.save(latent,"fpm_latent_41_25_geoconv")
 
     
 
     ################# analysis ##################
-    predict = np.argmax(predict,1)
-    IoU_value = IoU(predict,label)
-    sub = predict + label
+    # predict = np.argmax(predict,1)
+    # IoU_value = IoU(predict,label)
+    # sub = predict + label
     # IoU_list.append(IoU_value)
     # loss_list.append(loss)
     # np.save("loss_list",loss_list)
     # np.save("iou_list",IoU_list)
 
 
-    # latent = torch.load("results/cos_label/cos_latent_last49")
+    # for i in range(5):
+    #     c0 = c
+    #     c0[0] += i/10
+    #     print(c0)
+    #     with torch.no_grad():
+    #         model.eval()
+    #         points = torch.from_numpy(c[None,:]).cuda().float()
+    #         signal = model.decode(points,xyz)
+    #         pc = torch.cat([xyz,signal],dim=-1)
+    #         pc = pc.cpu().numpy()[0]
+    #     vtk_write_image(dim,dim,dim,signal.cpu().numpy()[0],"test%d.vti" % i)
+    
 
-    # pca = PCA(4)
-    # pca.fit(latent)
-    # pickle.dump( pca, open( "states_saved/cos_k64_v256/pca_late", "wb" ) )
 
-    # pca = PCA(16)
-    # latent = pca.fit_transform(latent)
-    # km = KMeans(4,n_init=3,n_jobs=-1)
-    # embedding = km.fit_predict(latent)
-    # new_cluster = km.cluster_centers_
-    # print(km.cluster_centers_)
+    # fig = plt.figure()
+    # # ax = fig.add_subplot(121, projection='3d')
+    # # ax.title.set_text("original")
+    # ax2 = fig.add_subplot(111, projection='3d')
+    # ax2.title.set_text("recon")
+    # # ax.scatter(pc[:,0],pc[:,1],pc[:,2],c=pc[:,3])
+    # ax2.scatter(pc[:,0],pc[:,1],pc[:,2],c=pc[:,3])
+    # plt.show()
 
-    if mode=="cos":
-        array_dict = {
-            "predict": predict,
-            "label": label,
-            "sub": sub,
-            "phi":data[:,-1],
-            "velocity":data[:,3:6],
-            "acceleration":data[:,6:9],
-        }
-    else:
-        array_dict = {
-            # "pca": pca_output,
+    ############ PCA and histogram #############
+    # pd = PointData(data,args,np.arange(len(data)))
+    # pca_latent = np.zeros((len(data),4,4))
+    # for i,d in enumerate(pd):
+    #     print(i)
+    #     mask = d[1]
+    #     pc = d[0]
+    #     pc = pc[:mask,:4]
+    #     pca = PCA()
+    #     pca.fit(pc)
+    #     pca_lat = pca.components_
+    #     pca_latent[i] = pca_lat
+    # np.save("pca_latent",pca_latent)
+    pca_latent = np.load("pca_latent.npy")
+    pca_latent = pca_latent[:,0,:]
+    pca_latent = pca_latent.reshape(-1,4)
+    kmeans = KMeans(6)
+    pca_id = kmeans.fit_predict(pca_latent)
+    latent = torch.load("fpm_latent_41_25_geoconv")
+    km2 = KMeans(6)
+    embedding = km2.fit_predict(latent)
+    print(embedding.shape,embedding.shape)
+    array_dict = {
+            "pca": pca_id,
             # "mean": mean_neighbor,
             "embedding": embedding,
             "concentration": data[:,3],
             "velocity": data[:,4:]
         }
     vtk_data = numpy_to_vtk(data[:,:3],array_dict)
-    vtk_write(vtk_data,"cos_49.vtu")
+    vtk_write(vtk_data,"test_pca.vtu")
+    ############ grid reconstruction ##############
+    # xyz = [[-2.31,1.71,5.7]]
+    # pd = PointData(data,args,xyz)
+    # reconstruction(pd,model)
+    # exit()
+
+
+    ############# calculate k-means and projection ############
+    # latent = torch.load("block_latent_25_geoconv")
+    # print(latent.shape)
+    # km = KMeans(6,n_init=10,n_jobs=-1)
+    # embedding = km.fit_predict(latent)
+    # centers = km.cluster_centers_
+    # np.save("centers",centers)
+    # np.save("emb_grid",embedding)
+    # tsne = TSNE(n_jobs=-1)
+    # new = tsne.fit_transform(latent)
+    # np.save("tsne_projected",new)
+
+    ########## show the grid projection   #####
+    # tsne_projected = np.load("tsne_projected.npy")
+    # embedding = np.load("emb_grid.npy")
+    # print(tsne_projected.shape,embedding.shape)
+    # tsne_project(embedding,tsne_projected)
+
+    ########## vis latent centeres ##########
+    # centers = np.load("centers.npy")
+    # print(centers.shape)
+    # for i in range(len(centers)):
+    #     c = centers[i]
+    #     vis_latent(c,model,"cluster_%d.vti" % i)
+
+    ###### output actual grid class ###########
+    # dim = 30
+    # x = np.linspace(1/dim, 1, dim)
+    # y = np.linspace(1/dim, 1, dim)
+    # z = np.linspace(1/dim, 1, dim)
+    # xyz = np.meshgrid(x,y,z)
+    # xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
+    # cond = (xyz[:,0]-0.5)**2+(xyz[:,1]-0.5)**2 < 0.25
+    # xyz = xyz[cond]
+    # embedding = np.load("emb_grid.npy")
+    # xyz *= 10
+    # xyz[:,0]-=5
+    # xyz[:,1]-=5
+    # print(xyz.shape,embedding.shape)
+    # print(embedding.shape)
+    # if mode=="cos":
+    #     array_dict = {
+    #         "predict": predict,
+    #         "label": label,
+    #         "sub": sub,
+    #         "phi":data[:,-1],
+    #         "velocity":data[:,3:6],
+    #         "acceleration":data[:,6:9],
+    #     }
+    # else:
+    #     array_dict = {
+    #         # "pca": pca_out,
+    #         # "mean": mean_neighbor,
+    #         "embedding": embedding,
+    #         # "concentration": data[:,3],
+    #         # "velocity": data[:,4:]
+    #     }
+    # # vtk_data = numpy_to_vtk(data[:,:3],array_dict)
+    # vtk_data = numpy_to_vtk(xyz,array_dict)
+    # vtk_write(vtk_data,"test_grid.vtu")
 
     # hp = halo_reader(halo_directory)
     # print(hp)
