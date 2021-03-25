@@ -241,21 +241,23 @@ if __name__ == "__main__":
     # plt.show()
 
     ############ PCA and histogram #############
-    # pd = PointData(data,args,np.arange(len(data)))
-    # pca_latent = np.zeros((len(data),4,4))
-    # for i,d in enumerate(pd):
-    #     print(i)
-    #     mask = d[1]
-    #     pc = d[0]
-    #     pc = pc[:mask,:4]
-    #     pca = PCA()
-    #     pca.fit(pc)
-    #     pca_lat = pca.components_
-    #     pca_latent[i] = pca_lat
+    pd = PointData(data,args,np.arange(len(data)))
+    pca_latent = np.zeros((len(data),4,4))
+    for i,d in enumerate(pd):
+        print(i)
+        mask = d[1]
+        pc = d[0]
+        pc = pc[:mask,:4]
+        pca = PCA()
+        pca.fit(pc)
+        pca_lat = pca.components_
+        pca_latent[i] = pca_lat
+        print(pca.explained_variance_)
     # np.save("pca_latent",pca_latent)
+    exit()
     pca_latent = np.load("pca_latent.npy")
-    pca_latent = pca_latent[:,0,:]
-    pca_latent = pca_latent.reshape(-1,4)
+    # pca_latent = pca_latent[:,0,:]
+    pca_latent = pca_latent.reshape(-1,16)
     kmeans = KMeans(6)
     pca_id = kmeans.fit_predict(pca_latent)
     latent = torch.load("fpm_latent_41_25_geoconv")
