@@ -37,7 +37,7 @@ class PointNet(nn.Module):
             nn.Linear(self.vector_length//2,2),
         )
 
-    def encode(self,x,mask=None):
+    def encode(self,x):
         batch_size = len(x)
         n_points = x.shape[1]
         n_channel = self.num_channel
@@ -81,9 +81,9 @@ class PointNet(nn.Module):
             recon_loss += torch.sum(torch.pow((o-t),2))/m.item()
         return recon_loss
 
-    def forward(self, x, mask=None):
+    def forward(self, x):
         xyz = x[:,:,:3]
-        z = self.encode(x, mask)
+        z = self.encode(x)
         # print(z)
         if self.have_label:
             y = self.cls(z)

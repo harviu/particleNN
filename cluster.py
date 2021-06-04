@@ -132,15 +132,15 @@ def reconstruction(pd,model):
 
 
 if __name__ == "__main__":
-    data_path = './data/'
-    mode = "fpm"
+    data_path = os.environ['data']
+    mode = "cos"
     # IoU_list = []
     # loss_list = []
     # for i in range(2,100,1):
     #     print(i)
     i = 49
-    if mode == "fpm":
-        data_directory = data_path+"/fpm/lr_41/025.vtu"
+    if mode == "cos":
+        data_directory = data_path + "/2016_scivis_fpm/0.44/run41/025.vtu"
         # state_dict_directory = "states_saved/fpm_knn128_dim7_vec64_CP35.pth"
         state_dict_directory = "states/CP10.pth"
         data = vtk_reader(data_directory)
@@ -174,16 +174,16 @@ if __name__ == "__main__":
         # torch.save(predict,"predict")
     else:
         dim = 30
-        # x = np.linspace(1/dim, 1, dim)
-        # y = np.linspace(1/dim, 1, dim)
-        # z = np.linspace(1/dim, 1, dim)
-        # xyz = np.meshgrid(x,y,z)
-        # xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
-        # cond = (xyz[:,0]-0.5)**2+(xyz[:,1]-0.5)**2 < 0.25
-        # xyz = xyz[cond]
-        # pd = PointData(data,args,xyz)
-        pd = PointData(data,args,np.arange(len(data)))
-        loader = DataLoader(pd, batch_size=1500, shuffle=False, drop_last=False)
+        x = np.linspace(-5, 5, dim)
+        y = np.linspace(-5, 5, dim)
+        z = np.linspace(0, 10, dim)
+        xyz = np.meshgrid(x,y,z)
+        xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
+        cond = xyz[:,0]**2+xyz[:,1]**2 < 25
+        xyz = xyz[cond]
+        pd = PointData(data,args,xyz)
+        # pd = PointData(data,args,np.arange(len(data)))
+        loader = DataLoader(pd, batch_size=1000, shuffle=False, drop_last=False)
         # # major_axis = np.zeros((len(data),4))
         # # for i,(d,m) in enumerate(loader):
         # #     d = d[0,:m,:4]
@@ -208,6 +208,110 @@ if __name__ == "__main__":
     
 
     ################# analysis ##################
+    # data_directory = 'D:\\OneDrive - The Ohio State University\\data/ds14_scivis_0128/raw/ds14_scivis_0128_e4_dt04_0.4900'
+    # halo_directory = 'D:\\OneDrive - The Ohio State University\\data/ds14_scivis_0128/rockstar/out_47.list'
+    # hp = halo_reader(halo_directory)
+    # halo_position, halo_radius = hp
+    # data = sdf_reader(data_directory)
+    # coord = data[:,:3]
+    # kd = cKDTree(coord,leafsize=100)
+    # label = np.zeros(len(data))
+    # for i in range(len(halo_position)):
+    #     positive = kd.query_ball_point(halo_position[i],halo_radius[i])
+    #     label[positive] = 1
+    # emb = np.load("./results/cosmology/kmeans_49.npy")
+    # cond = np.array(emb==3) 
+    # print(np.sum(label[cond])/np.sum(label))
+
+    # latent = torch.load("./results/cosmology/latent_all_49")
+    # print(latent.shape)
+    # km = KMeans(4)
+    # emb = km.fit_predict(latent)
+    # np.save("./results/cosmology/kmeans_49",emb)
+    # array_dict = {
+    #     "predict": emb,
+    #     "label": label,
+    #     "phi":data[:,-1],
+    #     "velocity":data[:,3:6],
+    #     "acceleration":data[:,6:9],
+    # }
+    # vtk_data = numpy_to_vtk(data[:,:3],array_dict)
+    # vtk_write(vtk_data,"test_cos.vtu")
+
+    ################# recon_all ################
+    # model.eval()
+    # num = len(pd) * 256
+    # coord_list = np.zeros((num,3))
+    # attr_list = np.zeros((num,))
+    # count = 0
+    # batch_count = 0
+    # mse = 0
+    # with torch.no_grad():
+    #     for i, d in enumerate(loader):
+    #         data = d[0][:,:,:args.dim].float().cuda()
+    #         mask = d[1].cuda()
+    #         recon_batch = model(data)
+
+    #         centers = pd.center[batch_count:batch_count+len(mask)]
+    #         batch_count += len(mask)
+    #         for b in range(len(mask)):
+    #             m = mask[b]
+    #             coord = data[b,:m,:3]
+    #             attr = recon_batch[b,:m,0]
+    #             mse += torch.sum((attr - data[b,:m,3]) ** 2)
+    #             center = centers[b][None,:]
+    #             coord_list[count:count+m] = coord.cpu().detach().numpy() + center
+    #             attr_list[count:count+m] = attr.cpu().detach().numpy()
+    #             count += m
+    #         print(count)
+    #     mse /= count
+    #     print(mse)
+    #     coord_list = coord_list[:count]
+    #     attr_list = attr_list[:count]
+    #     coord_list *= 10
+    #     coord_list[:,0] -= 5
+    #     coord_list[:,1] -= 5
+    #     attr_list *= 357.19
+    #     np.save("coord",coord_list)
+    #     np.save("attr",attr_list)
+
+    # array_dict = {
+    #         "concentration": attr_list,
+    #     }
+    # vtk_data = numpy_to_vtk(coord_list,array_dict)
+    # vtk_write(vtk_data,"recon.vtu")
+
+    coord = np.load("coord.npy")
+    attr = np.load("attr.npy")
+    coord = torch.from_numpy(coord).cuda()
+    attr = torch.from_numpy(attr).cuda()
+
+    r_coord = data[:,:3]
+    r_coord = torch.from_numpy(r_coord).cuda()
+    r_attr = data[:,3]
+    r_attr = torch.from_numpy(r_attr).cuda()
+    # print(torch.max(r_attr),torch.max(attr))
+
+    new_attr = torch.zeros_like(r_attr)
+
+    for i, c in enumerate(r_coord):
+        co = coord - c[None,:]
+        distance = torch.sum(torch.abs(co), dim=-1)
+        near_coord = torch.where(distance < 0.001)
+        new_attr[i] = torch.mean(attr[near_coord])
+        # print(new_attr[i],r_attr[i])
+        print(i)
+    mse = torch.mean( ((new_attr - r_attr) ** 2) )
+    print(mse)
+
+    array_dict = {
+            "concentration": new_attr.cpu().numpy(),
+        }
+    vtk_data = numpy_to_vtk(data[:,:3],array_dict)
+    vtk_write(vtk_data,"recon.vtu")
+
+
+
     # predict = np.argmax(predict,1)
     # IoU_value = IoU(predict,label)
     # sub = predict + label
@@ -241,38 +345,37 @@ if __name__ == "__main__":
     # plt.show()
 
     ############ PCA and histogram #############
-    pd = PointData(data,args,np.arange(len(data)))
-    pca_latent = np.zeros((len(data),4,4))
-    for i,d in enumerate(pd):
-        print(i)
-        mask = d[1]
-        pc = d[0]
-        pc = pc[:mask,:4]
-        pca = PCA()
-        pca.fit(pc)
-        pca_lat = pca.components_
-        pca_latent[i] = pca_lat
-        print(pca.explained_variance_)
+    # pd = PointData(data,args,np.arange(len(data)))
+    # pca_latent = np.zeros((len(data),4,4))
+    # for i,d in enumerate(pd):
+    #     print(i)
+    #     mask = d[1]
+    #     pc = d[0]
+    #     pc = pc[:mask,:4]
+    #     pca = PCA()
+    #     pca.fit(pc)
+    #     pca_lat = pca.components_
+    #     pca_latent[i] = pca_lat
+    #     print(pca.explained_variance_)
     # np.save("pca_latent",pca_latent)
-    exit()
-    pca_latent = np.load("pca_latent.npy")
-    # pca_latent = pca_latent[:,0,:]
-    pca_latent = pca_latent.reshape(-1,16)
-    kmeans = KMeans(6)
-    pca_id = kmeans.fit_predict(pca_latent)
-    latent = torch.load("fpm_latent_41_25_geoconv")
-    km2 = KMeans(6)
-    embedding = km2.fit_predict(latent)
-    print(embedding.shape,embedding.shape)
-    array_dict = {
-            "pca": pca_id,
-            # "mean": mean_neighbor,
-            "embedding": embedding,
-            "concentration": data[:,3],
-            "velocity": data[:,4:]
-        }
-    vtk_data = numpy_to_vtk(data[:,:3],array_dict)
-    vtk_write(vtk_data,"test_pca.vtu")
+    # pca_latent = np.load("pca_latent.npy")
+    # # pca_latent = pca_latent[:,0,:]
+    # pca_latent = pca_latent.reshape(-1,16)
+    # kmeans = KMeans(6)
+    # pca_id = kmeans.fit_predict(pca_latent)
+    # latent = torch.load("fpm_latent_41_25_geoconv")
+    # km2 = KMeans(6)
+    # embedding = km2.fit_predict(latent)
+    # print(embedding.shape,embedding.shape)
+    # array_dict = {
+    #         "pca": pca_id,
+    #         # "mean": mean_neighbor,
+    #         "embedding": embedding,
+    #         "concentration": data[:,3],
+    #         "velocity": data[:,4:]
+    #     }
+    # vtk_data = numpy_to_vtk(data[:,:3],array_dict)
+    # vtk_write(vtk_data,"test_pca.vtu")
     ############ grid reconstruction ##############
     # xyz = [[-2.31,1.71,5.7]]
     # pd = PointData(data,args,xyz)
