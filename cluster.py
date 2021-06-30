@@ -132,58 +132,65 @@ def reconstruction(pd,model):
 
 
 if __name__ == "__main__":
-    data_path = os.environ['data']
-    mode = "cos"
-    # IoU_list = []
-    # loss_list = []
-    # for i in range(2,100,1):
-    #     print(i)
-    i = 49
-    if mode == "cos":
-        data_directory = data_path + "/2016_scivis_fpm/0.44/run41/025.vtu"
-        # state_dict_directory = "states_saved/fpm_knn128_dim7_vec64_CP35.pth"
-        state_dict_directory = "states/CP10.pth"
-        data = vtk_reader(data_directory)
-    else:
-        if i == 100:
-            data_directory = data_path + '/ds14_scivis_0128/raw/ds14_scivis_0128_e4_dt04_0.{:02d}00'.format(i)
-        else:
-            data_directory = data_path + '/ds14_scivis_0128/raw/ds14_scivis_0128_e4_dt04_0.{:02d}00'.format(i)
-        state_dict_directory = "states_saved/cos_k64_v256/CP29.pth"
-        # state_dict_directory = "states_saved/cos_k128_v256/CP16.pth"
-        # state_dict_directory = "states_saved/cos_k128_v512/CP35.pth"
-        # state_dict_directory = "states_saved/cos_k128_v768/CP13.pth"
-        # state_dict_directory = "states_saved/cos_k256_v512/CP20.pth"
-        # state_dict_directory = "states_saved/cos_k64_v512/CP35.pth"
-        # state_dict_directory = "states_saved/cos_k32_v256/CP35.pth"
-        halo_directory = data_path + '/ds14_scivis_0128/rockstar/out_{}.list'.format(i-2)
-        data = sdf_reader(data_directory)
+    res = np.load("eth_predict.npy")
+    vtk_write_image(115,116,134,res[:,1],"predict.vti")
+    print(res.shape)
+    # rho = res[:,0]
+    # s = res[:,1]
+    # plt.imshow(s.reshape(134,116,115)[:,:,57])
+    # plt.show()
+    # data_path = os.environ['data']
+    # mode = "cos"
+    # # IoU_list = []
+    # # loss_list = []
+    # # for i in range(2,100,1):
+    # #     print(i)
+    # i = 49
+    # if mode == "cos":
+    #     data_directory = data_path + "/2016_scivis_fpm/0.44/run41/025.vtu"
+    #     # state_dict_directory = "states_saved/fpm_knn128_dim7_vec64_CP35.pth"
+    #     state_dict_directory = "states/CP10.pth"
+    #     data = vtk_reader(data_directory)
+    # else:
+    #     if i == 100:
+    #         data_directory = data_path + '/ds14_scivis_0128/raw/ds14_scivis_0128_e4_dt04_0.{:02d}00'.format(i)
+    #     else:
+    #         data_directory = data_path + '/ds14_scivis_0128/raw/ds14_scivis_0128_e4_dt04_0.{:02d}00'.format(i)
+    #     state_dict_directory = "states_saved/cos_k64_v256/CP29.pth"
+    #     # state_dict_directory = "states_saved/cos_k128_v256/CP16.pth"
+    #     # state_dict_directory = "states_saved/cos_k128_v512/CP35.pth"
+    #     # state_dict_directory = "states_saved/cos_k128_v768/CP13.pth"
+    #     # state_dict_directory = "states_saved/cos_k256_v512/CP20.pth"
+    #     # state_dict_directory = "states_saved/cos_k64_v512/CP35.pth"
+    #     # state_dict_directory = "states_saved/cos_k32_v256/CP35.pth"
+    #     halo_directory = data_path + '/ds14_scivis_0128/rockstar/out_{}.list'.format(i-2)
+    #     data = sdf_reader(data_directory)
     
-    state_dict = torch.load(state_dict_directory)
-    state = state_dict['state']
-    args = state_dict['config']
-    print(args)
-    model = AE(args,256).float().cuda()
-    model.load_state_dict(state)
-    if args.have_label:
-        hp = halo_reader(halo_directory)
-        pd = PointData(data,args,np.arange(len(data)),hp)
-        latent,predict,loss = inference(pd,model,1000,args)
-        label = pd.label
-        # torch.save(latent,"cos_latent_middle49")
-        # torch.save(predict,"predict")
-    else:
-        dim = 30
-        x = np.linspace(-5, 5, dim)
-        y = np.linspace(-5, 5, dim)
-        z = np.linspace(0, 10, dim)
-        xyz = np.meshgrid(x,y,z)
-        xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
-        cond = xyz[:,0]**2+xyz[:,1]**2 < 25
-        xyz = xyz[cond]
-        pd = PointData(data,args,xyz)
-        # pd = PointData(data,args,np.arange(len(data)))
-        loader = DataLoader(pd, batch_size=1000, shuffle=False, drop_last=False)
+    # state_dict = torch.load(state_dict_directory)
+    # state = state_dict['state']
+    # args = state_dict['config']
+    # print(args)
+    # model = AE(args,256).float().cuda()
+    # model.load_state_dict(state)
+    # if args.have_label:
+    #     hp = halo_reader(halo_directory)
+    #     pd = PointData(data,args,np.arange(len(data)),hp)
+    #     latent,predict,loss = inference(pd,model,1000,args)
+    #     label = pd.label
+    #     # torch.save(latent,"cos_latent_middle49")
+    #     # torch.save(predict,"predict")
+    # else:
+    #     dim = 30
+    #     x = np.linspace(-5, 5, dim)
+    #     y = np.linspace(-5, 5, dim)
+    #     z = np.linspace(0, 10, dim)
+    #     xyz = np.meshgrid(x,y,z)
+    #     xyz = np.stack([xyz[0].flatten(),xyz[1].flatten(),xyz[2].flatten()],axis=-1)
+    #     cond = xyz[:,0]**2+xyz[:,1]**2 < 25
+    #     xyz = xyz[cond]
+    #     pd = PointData(data,args,xyz)
+    #     # pd = PointData(data,args,np.arange(len(data)))
+    #     loader = DataLoader(pd, batch_size=1000, shuffle=False, drop_last=False)
         # # major_axis = np.zeros((len(data),4))
         # # for i,(d,m) in enumerate(loader):
         # #     d = d[0,:m,:4]
@@ -281,34 +288,34 @@ if __name__ == "__main__":
     # vtk_data = numpy_to_vtk(coord_list,array_dict)
     # vtk_write(vtk_data,"recon.vtu")
 
-    coord = np.load("coord.npy")
-    attr = np.load("attr.npy")
-    coord = torch.from_numpy(coord).cuda()
-    attr = torch.from_numpy(attr).cuda()
+    # coord = np.load("coord.npy")
+    # attr = np.load("attr.npy")
+    # coord = torch.from_numpy(coord).cuda()
+    # attr = torch.from_numpy(attr).cuda()
 
-    r_coord = data[:,:3]
-    r_coord = torch.from_numpy(r_coord).cuda()
-    r_attr = data[:,3]
-    r_attr = torch.from_numpy(r_attr).cuda()
+    # r_coord = data[:,:3]
+    # r_coord = torch.from_numpy(r_coord).cuda()
+    # r_attr = data[:,3]
+    # r_attr = torch.from_numpy(r_attr).cuda()
     # print(torch.max(r_attr),torch.max(attr))
 
-    new_attr = torch.zeros_like(r_attr)
+    # new_attr = torch.zeros_like(r_attr)
 
-    for i, c in enumerate(r_coord):
-        co = coord - c[None,:]
-        distance = torch.sum(torch.abs(co), dim=-1)
-        near_coord = torch.where(distance < 0.001)
-        new_attr[i] = torch.mean(attr[near_coord])
-        # print(new_attr[i],r_attr[i])
-        print(i)
-    mse = torch.mean( ((new_attr - r_attr) ** 2) )
-    print(mse)
+    # for i, c in enumerate(r_coord):
+    #     co = coord - c[None,:]
+    #     distance = torch.sum(torch.abs(co), dim=-1)
+    #     near_coord = torch.where(distance < 0.001)
+    #     new_attr[i] = torch.mean(attr[near_coord])
+    #     # print(new_attr[i],r_attr[i])
+    #     print(i)
+    # mse = torch.mean( ((new_attr - r_attr) ** 2) )
+    # print(mse)
 
-    array_dict = {
-            "concentration": new_attr.cpu().numpy(),
-        }
-    vtk_data = numpy_to_vtk(data[:,:3],array_dict)
-    vtk_write(vtk_data,"recon.vtu")
+    # array_dict = {
+    #         "concentration": new_attr.cpu().numpy(),
+    #     }
+    # vtk_data = numpy_to_vtk(data[:,:3],array_dict)
+    # vtk_write(vtk_data,"recon.vtu")
 
 
 

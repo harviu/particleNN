@@ -58,13 +58,12 @@ class PointDataFPM(Dataset):
 
 class PointData(Dataset):
     #dataset for individual point
-    def __init__(self,data,args,sampler=None,halo_info=None):
+    def __init__(self,data,args,sampler=None):
         mode = args.mode
         k = args.k
         self.k = int(k)
         self.r = args.r
         self.mode = mode
-        self.have_label = args.have_label and halo_info is not None
         source = args.source
         if source == "fpm":
             data_max = np.array([ 5, 5, 10.00022221, 357.19000244, 38.62746811, 48.47133255, 50.60621262])
@@ -72,76 +71,50 @@ class PointData(Dataset):
             # mean = [0, 0, 5, 23.9, 0, 0, 0.034]
             # std = [2.68, 2.68, 3.09, 55.08, 0.3246, 0.3233, 0.6973]
         elif source == "cos":
-            data_max=  np.array([0,0,0, -2466, -2761, -2589, -17135.6, -20040, -20096, -6928022])
-            data_min=  np.array([6.2500008e+01, 6.2500000e+01, 6.2500000e+01, 2.7808181e+03, 2.9791230e+03, 2.6991892e+03, 1.9324572e+04, 2.0033873e+04, 1.7973633e+04, 6.3844562e+05])
+            data_min=  np.array([0,0,0, -2466, -2761, -2589, -17135.6, -20040, -20096, -6928022])
+            data_max=  np.array([6.2500008e+01, 6.2500000e+01, 6.2500000e+01, 2.7808181e+03, 2.9791230e+03, 2.6991892e+03, 1.9324572e+04, 2.0033873e+04, 1.7973633e+04, 6.3844562e+05])
             # mean = [30.4, 32.8, 32.58, 0, 0, 0, 0, 0, 0, -732720]
             # std = [18.767, 16.76, 17.62, 197.9, 247.2, 193.54, 420.92, 429, 422.3, 888474]
+        elif source == 'eth':
+            data_min = np.array([ 0., 0., 0., -4.4875424, -1.914121])
+            data_max = np.array([1., 1., 1., 4.22590344, 1.70973541])
         data = (data - data_min) / (data_max-data_min)
         data = np.clip(data,0,1)
         coord = data[:,:3]
         kd = cKDTree(coord,leafsize=100)
 
-        if self.have_label:
-            halo_position, halo_radius = halo_info
-            if len(halo_position) > 0:
-                halo_position = normalize(halo_position,mean[:3],std[:3])
-                halo_radius /= np.mean(std[:3])
-                positive = []
-                for i in range(len(halo_position)):
-                    positive += list(kd.query_ball_point(halo_position[i],halo_radius[i]))
-                positive = np.unique(positive)
-            else:
-                positive = []
-
         if sampler is None:
             # sample the data according to args.sample_size
-            if self.have_label:
-                # balanced sample of labels
-                all_sample = np.arange(len(data))
-                negative = np.delete(all_sample,positive)
-                if len(positive) > args.sample_size//2:
-                    positive = np.random.choice(positive,args.sample_size//2,replace=False)
-                    negative = np.random.choice(negative,args.sample_size//2,replace=False)
-                    sample_id = np.concatenate((positive,negative)).astype(np.int)
-                else:
-                    num_negative = args.sample_size - len(positive)
-                    negative = np.random.choice(negative,num_negative,replace=False)
-                    sample_id = np.concatenate((positive,negative)).astype(np.int)
-                self.label = np.zeros((len(sample_id)),dtype=np.int64)
-                self.label[:len(positive)] = 1
-            else:
-                #balanced sample of attributes
-                attr = data[:,3:]
-                leaf_size = len(data)//args.sample_size
-                # for some input files, enforce balanced tree will cause bug.
-                attr_kd = cKDTree(attr,leaf_size,balanced_tree=False)
-                leaf = all_leaf_nodes(attr_kd.tree)
-                rand = np.random.rand((len(leaf)))
-                idx = []
-                for i,l in enumerate(leaf):
-                    indices = l.indices
-                    idx.append(indices[int(len(indices)*rand[i])])
-                sample_id = idx
+            #balanced sample of attributes
+            attr = data[:,3:]
+            leaf_size = len(data)//args.sample_size
+            # for some input files, enforce balanced tree will cause bug.
+            attr_kd = cKDTree(attr,leaf_size,balanced_tree=False)
+            leaf = all_leaf_nodes(attr_kd.tree)
+            rand = np.random.rand((len(leaf)))
+            idx = []
+            for i,l in enumerate(leaf):
+                indices = l.indices
+                idx.append(indices[int(len(indices)*rand[i])])
+            sample_id = idx
             self.center = data[sample_id,:3]
         else:
             sampler = np.array(sampler)
             if len(sampler.shape) == 1:
+                # sample index
                 sample_id = sampler
                 self.center = data[sample_id,:3]
-                if self.have_label:
-                    label = np.zeros((len(data)),dtype=np.int64)
-                    label[positive] = 1
-                    self.label = label[sample_id]
             else:
+                # sample center
                 sampler = sampler/10
                 sampler[:,0] += 0.5
                 sampler[:,1] += 0.5
                 self.center = sampler
-                
+        
         if mode == "ball":
-            self.nn = kd.query_ball_point(self.center,self.r,n_jobs=-1)
+            self.nn = kd.query_ball_point(self.center,self.r,workers=8)
         elif mode == "knn":
-            _, self.nn = kd.query(self.center,k,n_jobs=-1)
+            _, self.nn = kd.query(self.center,self.k,workers=8)
         self.data = data
 
     def __getitem__(self, index):
@@ -161,17 +134,11 @@ class PointData(Dataset):
                 remaining = np.zeros((self.k-len(nn_id),dim))
                 pc = np.concatenate((pc,remaining),axis=0)
                 pc_length = len(nn_id)
-            if self.have_label:
-                return pc, pc_length, self.label[index]
-            else:
-                return pc, pc_length
+            return pc, pc_length
         elif self.mode =="knn":
             pc = self.data[nn_id]
             pc[:,:3] -= center[:3]
-            if self.have_label:
-                return pc, self.label[index]
-            else:
-                return pc
+            return pc
     def __len__(self):
         return len(self.nn)
 
@@ -228,6 +195,14 @@ def halo_writer(center,Rvir,outputname):
     writer.SetFileName(outputname)
     writer.Write()
 
+def data_reader(filename, type):
+    if type == 'cos':
+        return sdf_reader(filename)
+    elif type == 'fpm':
+        return vtk_reader(filename)
+    elif type == 'eth':
+        return eth_reader(filename)
+
 def vtk_reader(filename):
     reader = vtk.vtkXMLUnstructuredGridReader()
     reader.SetFileName(filename)
@@ -246,9 +221,30 @@ def sdf_reader(filename):
     cosmo_a = particles.parameters['a']
     kpc_to_Mpc = 1./1000
     convert_to_cMpc = lambda proper: (proper ) * h_100 * kpc_to_Mpc / cosmo_a + 31.25
-    numpy_data = np.array(list(particles.values())[2:-1]).T
+    numpy_data = np.array(list(particles.values())[2:-1]).T # coord, velocity, acceleration, phi
     numpy_data[:,:3] = convert_to_cMpc(numpy_data[:,:3])
     return numpy_data
+
+def eth_reader(filename):
+    reader = vtk.vtkXMLImageDataReader()
+    reader.SetFileName(filename)
+    reader.Update()
+    vtk_data = reader.GetOutput()
+    _,x,_,y,_,z = vtk_data.GetBounds()
+    nx=int(x+1)
+    ny=int(y+1)
+    nz=int(z+1)
+    log_Rho = numpy_support.vtk_to_numpy(vtk_data.GetPointData().GetArray(0))
+    log_s = numpy_support.vtk_to_numpy(vtk_data.GetPointData().GetArray(1))
+    x = np.linspace(0,1,nx)
+    y = np.linspace(0,1,ny)
+    z = np.linspace(0,1,nz)
+    z, y, x = np.meshgrid(x,y,z,indexing='xy')
+    data = np.stack((x.flatten(),y.flatten(),z.flatten(),log_Rho,log_s),axis=-1)
+    return data 
+
+    
+
     
 def normalize(data,mean,std):
     return (data - mean)/std
@@ -259,7 +255,7 @@ def all_leaf_nodes(node):
     else:
         return(all_leaf_nodes(node.lesser)+all_leaf_nodes(node.greater))
 
-def collect_file(directory,mode="fpm",shuffle=False):
+def collect_file(directory,mode,shuffle=True):
     file_list = []
     for (dirpath, dirnames, filenames) in os.walk(directory):
         for filename in filenames:
@@ -340,14 +336,15 @@ def vtk_write_image(x_dim,y_dim,z_dim,data,filename):
     imageData.AllocateScalars(vtk.VTK_DOUBLE, 1)
 
     dims = imageData.GetDimensions()
+    vtk_data = numpy_support.numpy_to_vtk(data)
+    imageData.GetPointData().AddArray(vtk_data)
 
-    # Fill every entry of the image data with "2.0"
-    i = 0
-    for z in range(dims[2]):
-        for y in range(dims[1]):
-            for x in range(dims[0]):
-                imageData.SetScalarComponentFromDouble(z, y, x, 0, data[i])
-                i+=1
+    # i = 0
+    # for z in range(dims[2]):
+    #     for y in range(dims[1]):
+    #         for x in range(dims[0]):
+    #             imageData.SetScalarComponentFromDouble(z, y, x, 0, data[i])
+    #             i+=1
 
 
     writer = vtk.vtkXMLImageDataWriter()
@@ -375,11 +372,5 @@ def plot_loss(filename):
                     count = 1
     print(loss_list)
 
-# data = np.load("recon_points.npy")
-# print(data.shape)
-# array_dict = {
-#     "concentration":data[:,3],
-#     "velocigy":data[:,4:]
-# }
-# data_save = numpy_to_vtk(data[:,:3],array_dict)
-# vtk_write(data_save,"recon_vtk.vtu")
+if __name__ == "__main__":
+    eth_reader('F:\\OneDrive - The Ohio State University\\data/ethanediol.vti')

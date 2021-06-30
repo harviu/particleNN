@@ -5,7 +5,7 @@ import numpy as np
 import random
 
 class PointNet(nn.Module):
-    def __init__(self,args,enc_out):
+    def __init__(self,args):
         """
         input size: B * N * C
         """
@@ -14,28 +14,13 @@ class PointNet(nn.Module):
         self.num_channel = args.dim
         self.prediction_num = args.k
         self.mode = args.mode
-        self.have_label = args.have_label
+        enc_out = args.enc_out
         self.geoconv = GeoConv(self.num_channel,enc_out,enc_out//4,args.r * 0.5,args.r)
         # self.geoconv = shared_mlp(args.dim,[enc_out//4,enc_out])
         self.fc01 = nn.Linear(enc_out,self.vector_length)
-        self.geodeconv = GeoDeConv(self.vector_length+3,[256,64])
+        self.geodeconv = GeoDeConv(self.vector_length+3,[enc_out,enc_out//4])
         # self.geodeconv = shared_mlp(self.vector_length+3,[enc_out,enc_out//4])
         self.fc02 = nn.Linear(64,self.num_channel-3)
-
-        self.cls = nn.Sequential(
-            nn.BatchNorm1d(self.vector_length),
-            nn.LeakyReLU(),
-
-            nn.Linear(self.vector_length,self.vector_length),
-            nn.BatchNorm1d(self.vector_length),
-            nn.LeakyReLU(),
-
-            nn.Linear(self.vector_length,self.vector_length//2),
-            nn.BatchNorm1d(self.vector_length//2),
-            nn.LeakyReLU(),
-
-            nn.Linear(self.vector_length//2,2),
-        )
 
     def encode(self,x):
         batch_size = len(x)
@@ -47,7 +32,6 @@ class PointNet(nn.Module):
         # x = self.geoconv(x)
         # x = torch.max(x,dim=-2)[0]
         x = self.fc01(x)
-        x = F.relu(x)
         return x
     
     def decode(self,z,xyz):
@@ -75,20 +59,19 @@ class PointNet(nn.Module):
 
     def MSE_loss(self, output, target, mask):
         recon_loss = 0
+        total_m = 0
         for o,t,m in zip(output,target,mask):
-            o = o[:m]
-            t = t[:,3:][:m]
-            recon_loss += torch.sum(torch.pow((o-t),2))/m.item()
+            o = o[:m,:]
+            t = t[:m,3:]
+            total_m += m
+            recon_loss += F.mse_loss(o,t,reduction='sum')
+        recon_loss /= total_m * output.shape[-1]
         return recon_loss
 
     def forward(self, x):
         xyz = x[:,:,:3]
         z = self.encode(x)
-        # print(z)
-        if self.have_label:
-            y = self.cls(z)
-        else:
-            y = self.decode(z,xyz)
+        y = self.decode(z,xyz)
         return y
 
 def nn_distance(pc1,pc2):
