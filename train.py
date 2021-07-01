@@ -19,11 +19,11 @@ def inference_latent(loader,model,args):
         latent_all = torch.zeros((len(loader.dataset),args.vector_length),dtype=torch.float32,device="cpu")
         for i, (d,index) in enumerate(loader):
             if isinstance(d,list):
-                data = d[0][:,:,:args.dim].float().cuda()
+                data = d[0].float().cuda()
                 if args.mode=="ball" :
                     mask = d[1].cuda()
             else:
-                data = d[:,:,:args.dim].float().cuda()
+                data = d.float().cuda()
 
             latent = model.encode(data) 
             latent_all[i*args.batch_size:(i+1)*args.batch_size] = latent.detach().cpu()
@@ -40,11 +40,11 @@ def train(model,loader:DataLoader,optimizer,args,epoch):
         print("number of samples: ",len(loader.dataset))
         for i, (d,index) in enumerate(loader):
             if isinstance(d,list):
-                data = d[0][:,:,:args.dim].float().to(device)
+                data = d[0].float().to(device)
                 if args.mode=="ball" :
                     mask = d[1].to(device)
             else:
-                data = d[:,:,:args.dim].float().to(device)
+                data = d.float().to(device)
             optimizer.zero_grad()
             recon_batch = model(data) 
 

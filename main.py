@@ -49,13 +49,6 @@ if __name__ == "__main__":
         args.cuda = not args.no_cuda and torch.cuda.is_available()
         args.device = torch.device("cuda" if args.cuda else "cpu")
         args.mode = "ball" if args.ball else 'knn'
-
-    if args.source == "fpm":
-        args.dim = 7
-    elif args.source == "cos":
-        args.dim = 10
-    elif args.source == "eth":
-        args.dim = 5
     
     try:
         data_path = os.environ['data']
