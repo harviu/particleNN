@@ -27,8 +27,8 @@ def inference_latent(loader,model,args):
 
             latent = model.encode(data) 
             latent_all[i*args.batch_size:(i+1)*args.batch_size] = latent.detach().cpu()
-            print("processed",i+1,"/",len(loader),end="\r")
-        print()
+        #     print("processed",i+1,"/",len(loader),end="\r")
+        # print()
     return latent_all
 
 
