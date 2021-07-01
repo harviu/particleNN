@@ -16,3 +16,4 @@ plot.py
 *.gif
 *.vti
 example/
+.ipynb_checkpoints/

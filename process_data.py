@@ -16,7 +16,7 @@ from torch.utils.data import Dataset,DataLoader
 from yt.utilities.sdf import SDFRead
 from thingking import loadtxt
 
-class PointDataFPM(Dataset):
+class PointDataBlock(Dataset):
     # dataset in blocks
     def __init__(self,data,args):
         self.r = args.r
@@ -79,14 +79,16 @@ class PointData(Dataset):
             data_min = np.array([ 0., 0., 0., -4.4875424, -1.914121])
             data_max = np.array([1., 1., 1., 4.22590344, 1.70973541])
         data = (data - data_min) / (data_max-data_min)
-        data = np.clip(data,0,1)
         coord = data[:,:3]
+        attr = data[:,3:]
+        attr = attr * 0.8 + 0.1
+        coord = np.clip(coord,0,1)
+        attr = np.clip(attr,0.1,0.9)
+
         kd = cKDTree(coord,leafsize=100)
 
         if sampler is None:
-            # sample the data according to args.sample_size
             #balanced sample of attributes
-            attr = data[:,3:]
             leaf_size = len(data)//args.sample_size
             # for some input files, enforce balanced tree will cause bug.
             attr_kd = cKDTree(attr,leaf_size,balanced_tree=False)
@@ -99,6 +101,7 @@ class PointData(Dataset):
             sample_id = idx
             self.center = data[sample_id,:3]
         else:
+            # use input index as samples
             sampler = np.array(sampler)
             if len(sampler.shape) == 1:
                 # sample index
@@ -134,11 +137,11 @@ class PointData(Dataset):
                 remaining = np.zeros((self.k-len(nn_id),dim))
                 pc = np.concatenate((pc,remaining),axis=0)
                 pc_length = len(nn_id)
-            return pc, pc_length
+            return pc, pc_length, index
         elif self.mode =="knn":
             pc = self.data[nn_id]
             pc[:,:3] -= center[:3]
-            return pc
+            return pc, index
     def __len__(self):
         return len(self.nn)
 
@@ -345,7 +348,6 @@ def vtk_write_image(x_dim,y_dim,z_dim,data,filename):
     #         for x in range(dims[0]):
     #             imageData.SetScalarComponentFromDouble(z, y, x, 0, data[i])
     #             i+=1
-
 
     writer = vtk.vtkXMLImageDataWriter()
     writer.SetFileName(filename)

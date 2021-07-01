@@ -132,13 +132,6 @@ def reconstruction(pd,model):
 
 
 if __name__ == "__main__":
-    res = np.load("eth_predict.npy")
-    vtk_write_image(115,116,134,res[:,1],"predict.vti")
-    print(res.shape)
-    # rho = res[:,0]
-    # s = res[:,1]
-    # plt.imshow(s.reshape(134,116,115)[:,:,57])
-    # plt.show()
     # data_path = os.environ['data']
     # mode = "cos"
     # # IoU_list = []

@@ -20,14 +20,13 @@ def parse_arguments():
     parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('-p', '--patch-number', type=int,default=125,dest='p', help='how many patches in which one file is seperated')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=7, help='how many batches to wait before logging training status')
     parser.add_argument('-l', '--load', dest='load', type=str, default=False, help='load file model')
     parser.add_argument('-v', '--vector', dest='vector_length', type=int, default=16, help='vector length')
     parser.add_argument('--ball', dest='ball', action='store_true', default=False, help='train with ball surrounding')
     parser.add_argument('--learning-rate', dest='lr', type=float, default=0.001, help='learning-rate')
     parser.add_argument('-d','--data-source', dest='source', type=str, default="fpm", help='data source')
     parser.add_argument('-k', dest='k', type=int, default=256, help='k in knn')
-    parser.add_argument('-r', dest='r', type=float, default=0.04, help='r in ball query')
+    parser.add_argument('-r', dest='r', type=float, default=0.03, help='r in ball query')
     parser.add_argument('--enc-out', dest='enc_out', type=int, default=256, help='encoder output channel in geoGonv')
     parser.add_argument("--result-dir", dest="result_dir", type=str, default="states", help='the directory to save the result')
     args = parser.parse_args()
@@ -41,8 +40,10 @@ if __name__ == "__main__":
         state = state_dict['state']
         # load model related arguments
         config = state_dict['config']
+        epochs = args.epochs + config.epochs
         args = config
         args.start_epoch = config.epochs + 1 # change the start epoch for continous training
+        args.epochs = epochs
     else:
         args.start_epoch = 1
         args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -75,7 +76,7 @@ if __name__ == "__main__":
         data_source = data_reader(file_name, args.source)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # choice = np.random.choice(len(data_source),args.sample_size)
-            pd = PointData(data_source,args)
+            pd = PointData(data_source,args,np.arange(len(data_source)))
             loader = DataLoader(pd, batch_size=args.batch_size, shuffle=True, drop_last=False, **kwargs)
             train(model,loader,optimizer,args,epoch)
             

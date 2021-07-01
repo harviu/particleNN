@@ -16,10 +16,8 @@ class PointNet(nn.Module):
         self.mode = args.mode
         enc_out = args.enc_out
         self.geoconv = GeoConv(self.num_channel,enc_out,enc_out//4,args.r * 0.5,args.r)
-        # self.geoconv = shared_mlp(args.dim,[enc_out//4,enc_out])
         self.fc01 = nn.Linear(enc_out,self.vector_length)
         self.geodeconv = GeoDeConv(self.vector_length+3,[enc_out,enc_out//4])
-        # self.geodeconv = shared_mlp(self.vector_length+3,[enc_out,enc_out//4])
         self.fc02 = nn.Linear(64,self.num_channel-3)
 
     def encode(self,x):
@@ -29,17 +27,11 @@ class PointNet(nn.Module):
         xyz = x[:,:,:3]
         points = x[:,:,3:]
         x = self.geoconv(xyz,points)
-        # x = self.geoconv(x)
-        # x = torch.max(x,dim=-2)[0]
         x = self.fc01(x)
         return x
     
     def decode(self,z,xyz):
         y = self.geodeconv(xyz,z)
-        # B, D = z.shape
-        # z = z.view(B,1,D).repeat(1,xyz.shape[1],1)
-        # z = torch.cat([xyz,z],dim=-1)
-        # y = self.geodeconv(z)
         B, N, D = y.shape
         y = y.view(B*N,D)
         y = self.fc02(y)
@@ -118,6 +110,7 @@ class GeoDeConv(nn.Module):
     '''
     def __init__(self,in_channel,channels):
         super().__init__()
+        self.center_mlp = nn.Linear(in_channel,channels[-1])
         self.DeConv = nn.Linear(in_channel,channels[0]*6,bias=False)
         self.mlp = nn.ModuleList()
         self.bn = nn.ModuleList()
@@ -130,6 +123,10 @@ class GeoDeConv(nn.Module):
     def forward(self,xyz,signal):
         B, N, C = xyz.shape
         _, D = signal.shape
+        center_xyz = xyz[:,0,:]
+        center_signal = torch.clone(signal)
+        center_input = torch.cat([center_signal,center_xyz],dim=-1)
+        center = self.center_mlp(center_input) #output size (B,out_channel)
         signal = signal.view(B,1,D).repeat(1,N,1)
         signal = torch.cat([xyz,signal],dim=-1)
         signal = signal.view(B*N,D+C)
@@ -137,8 +134,15 @@ class GeoDeConv(nn.Module):
         signal = signal.view(B,N,-1)
         signal = disperse(signal,xyz)
         signal = signal.view(B*N,-1)
-        for m,b in zip(self.mlp,self.bn):
-            signal = F.relu(b(m(signal)))
+        for i, (m,b) in enumerate(zip(self.mlp,self.bn)):
+            if i != len(self.mlp) -1:
+                signal = F.relu(b(m(signal)))
+            else: 
+                signal = m(signal)
+                signal = signal.view(B, N, -1)
+                signal[:,0,:] = center
+                signal = signal.view(B * N, -1)
+                signal = F.relu(b(signal))
         signal = signal.view(B, N, -1)
         return signal
 
@@ -148,7 +152,6 @@ def disperse(signal,xyz):
     B, N, C = xyz.shape
     _, _, D = signal.shape
     D //= 6
-
     vector_norm = torch.norm(xyz,dim=-1)  # (B,N)
     axis = [[0,0,1],[0,0,-1],[0,1,0],[0,-1,0],[1,0,0],[-1,0,0]]
     axis = torch.FloatTensor(axis).to(device).permute(1,0) #(3,6)
@@ -176,7 +179,7 @@ class GeoConv(nn.Module):
     '''
     def __init__(self,in_channel,out_channel,mid_channel,inner_radius,outer_radius):
         super().__init__()
-        # self.center_mlp = nn.Linear(in_channel,out_channel)
+        self.center_mlp = nn.Linear(in_channel,out_channel)
         self.direction_mlp = nn.Linear(in_channel,mid_channel * 6,bias=False)
         self.direction_bn = nn.BatchNorm1d(mid_channel)
         self.direction_mlp2 = nn.Linear(mid_channel,out_channel,bias=False)
@@ -186,10 +189,10 @@ class GeoConv(nn.Module):
 
     def forward(self,xyz,points):
         B,N,_ = points.shape
-        # center_point = points[:,0,:]
-        # center_xyz = xyz[:,0,:]
-        # center_input = torch.cat([center_point,center_xyz],dim=-1)
-        # center = self.center_mlp(center_input) #output size (B,out_channel)
+        center_point = points[:,0,:]
+        center_xyz = xyz[:,0,:]
+        center_input = torch.cat([center_point,center_xyz],dim=-1)
+        center = self.center_mlp(center_input) #output size (B,out_channel)
         dir_input = torch.cat([points,xyz],dim=-1)
         dir_input = dir_input.view(B*N,-1)
         direction = self.direction_mlp(dir_input)
@@ -199,7 +202,7 @@ class GeoConv(nn.Module):
         direction = self.direction_bn(direction)
         direction = F.relu(direction)
         direction = self.direction_mlp2(direction)
-        # output = center + direction
+        output = center + direction
         output = self.last_bn(direction)
         output = F.relu(output)
         return output
