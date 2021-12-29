@@ -1,0 +1,11 @@
+__pycache__/
+.vscode/
+*.o*[0-9]
+data/
+result*/
+state*/
+log*/
+*.log
+images/
+run*/
+.ipynb_checkpoints/
